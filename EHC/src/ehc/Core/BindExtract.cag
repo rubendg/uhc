@@ -1,0 +1,141 @@
+%%[0
+%include lhs2TeX.fmt
+%include afp.fmt
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% See CommonBindExtract
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen) hs module {%{EH}Core.BindExtract}
+%%]
+
+%%[(8 codegen) hs import({%{EH}Base.Common},{%{EH}Core},{%{EH}Ty})
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Interface structures
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen) hs export(BoundSel(..),noBoundSel,emptyBoundSel)
+-- | Selection predicates, an algebra for CBound fixed to yield Bool
+data BoundSel
+  = BoundSel
+      { selBind         :: Bool
+      , selMeta         :: ACoreBindAspectKeyS -> Bool
+      , selRelevTy      :: ACoreBindAspectKeyS -> RelevTy -> Bool
+      , selVal          :: ACoreBindAspectKeyS -> MetaLev -> CLbl -> Bool
+      , selTy           :: ACoreBindAspectKeyS -> Bool
+%%[[9090
+      , selFFE          :: -- TBD
+%%]]
+      }
+
+
+-- | Default selection
+noBoundSel, emptyBoundSel :: BoundSel
+noBoundSel
+  = BoundSel
+      { selBind			= False
+      , selMeta			= const False
+      , selRelevTy		= \_ _ -> False
+      , selVal			= \_ _ _ -> False
+      , selTy			= const False
+%%[[9090
+      , selFFE			= -- TBD
+%%]]
+      }
+
+emptyBoundSel = noBoundSel
+%%]
+
+%%[(8 codegen) hs export(boundSelVal,boundSelMetaLev0,boundSelMetaLev01)
+-- | Predefined selection: Val
+boundSelVal :: BoundSel
+boundSelVal
+  = noBoundSel
+      { selVal 			= \_ _ _ -> True
+      }
+
+-- | Predefined selection: same MetaLev (i.e. 0)
+boundSelMetaLev0 :: BoundSel
+boundSelMetaLev0
+  = noBoundSel
+      { selBind			= True
+      , selVal 			= \_ mlev _ -> mlev == 0
+      }
+
+-- | Predefined selection: same MetaLev (i.e. 0), + 1 higher (i.e. has signature)
+boundSelMetaLev01 :: BoundSel
+boundSelMetaLev01
+  = noBoundSel
+      { selBind			= True
+      , selVal 			= \_ mlev _ -> mlev <= 1
+      , selTy			= const True
+      }
+%%]
+
+%%[(8 codegen) hs export(SelVal)
+type SelVal = CBound
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Haskell itf
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen).WRAPPER ag import({Core/AbsSyn},{Core/CommonBindExtract})
+WRAPPER CBind CBound
+%%]
+
+%%[(8 codegen) hs export(cbindExtract,cboundExtract)
+-- | Extract CBounds for a binding, partitioned according to selection
+cbindExtract :: BoundSel -> CBind -> ([SelVal],[SelVal])
+cbindExtract sel b
+  = (selvalYesL_Syn_CBind t, selvalNoL_Syn_CBind t)
+  where t = wrap_CBind (sem_CBind b)
+              (Inh_CBind
+                { boundsel_Inh_CBind = sel
+                })
+
+-- | Extract CBounds for a bound, partitioned according to selection
+cboundExtract :: BoundSel -> CBound -> ([SelVal],[SelVal])
+cboundExtract sel b
+  = (selvalYesL_Syn_CBound t, selvalNoL_Syn_CBound t)
+  where t = wrap_CBound (sem_CBound b)
+              (Inh_CBound
+                { boundsel_Inh_CBound = sel
+                })
+%%]
+
+%%[(8 codegen) hs export(cbindExtractVal',cbindExtractVal,cboundExtractVal',cboundExtractVal)
+extractVal' :: (BoundSel -> b -> ([SelVal],[SelVal])) -> b -> (ACoreBindAspectKeyS,MetaLev,CExpr)
+extractVal' extr b
+  = (a,ml,e)
+  where (CBound_Val a ml _ e:_, _) = extr boundSelVal b
+
+extractVal :: (BoundSel -> b -> ([SelVal],[SelVal])) -> b -> CExpr
+extractVal extr b
+  = e
+  where (_,_,e) = extractVal' extr b
+
+cbindExtractVal' :: CBind -> (ACoreBindAspectKeyS,MetaLev,CExpr)
+cbindExtractVal' = extractVal' cbindExtract
+
+cbindExtractVal :: CBind -> CExpr
+cbindExtractVal = extractVal cbindExtract
+
+cboundExtractVal' :: CBound -> (ACoreBindAspectKeyS,MetaLev,CExpr)
+cboundExtractVal' = extractVal' cboundExtract
+
+cboundExtractVal :: CBound -> CExpr
+cboundExtractVal = extractVal cboundExtract
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% The returned value, just self
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen)
+ATTR AllExpr [ | | boundval: SELF ]
+%%]
+

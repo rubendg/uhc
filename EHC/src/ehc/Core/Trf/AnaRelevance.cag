@@ -13,7 +13,7 @@ Analyse Core, using relevance analysis, to relate properties (like relevance) of
 %%% Type based simplifications
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%[(8 codegen) hs module {%{EH}Core.Trf.AnaRelevance} import({%{EH}Ty},{%{EH}Base.Common},{%{EH}Base.Builtin},{%{EH}Gam},{%{EH}Opts},{%{EH}Base.Optimize},{%{EH}Core},{%{EH}VarMp},{%{EH}Substitutable})
+%%[(8 codegen) hs module {%{EH}Core.Trf.AnaRelevance} import({%{EH}Ty},{%{EH}Base.Common},{%{EH}Base.TermLike},{%{EH}Base.Builtin},{%{EH}Gam},{%{EH}Opts},{%{EH}Base.Optimize},{%{EH}Core},{%{EH}VarMp},{%{EH}Substitutable})
 %%]
 
 %%[(8 codegen) hs import(Data.Maybe, qualified Data.Map as Map, qualified Data.Set as Set, Control.Applicative)
@@ -515,7 +515,11 @@ ATTR AllBind [ forQuantRVarMp: RVarMp | | ]
 
 SEM CExpr
   | Let         binds       .   forQuantRVarMp  =   @binds.rvarMp
-  | Lam App     loc         .   forQuantRVarMp  =   emptyRVarMp
+  | Lam App
+%%[[(8 coresysf)
+    Arr
+%%]]
+  				loc         .   forQuantRVarMp  =   emptyRVarMp
 
 SEM CPatFld
   | Fld			bind        .   forQuantRVarMp  =   emptyRVarMp
@@ -811,8 +815,8 @@ SEM CExpr
                                                     @cTrf
   | Lam         lhs         .   cTrf            =   acoreLam1 @argNm $ annCoe @hereBodyCoe @body.cTrf
   | App         lhs         .   cTrf            =   let a = -- dbgApp @lhs.opts @argTy @funTy @func.ty $
-                                                            maybe @arg.cTrf (\(a,e) -> acoreBound1AspkeyVal a (annCoe @hereArgCoe e)) $ acoreBoundMbVal @arg.cTrf
-                                                        app = acoreApp1Bound (annCoe @hereFunCoe @func.cTrf) a
+                                                            maybe @arg.cTrf (\((a,_,_),e) -> acoreBound1AspkeyVal a (annCoe @hereArgCoe e)) $ acoreBoundMbVal @arg.cTrf
+                                                        app = acore1AppBound (annCoe @hereFunCoe @func.cTrf) a
                                                     in  app
   | Case        lhs         .   cTrf            =   -- @dbg $
                                                     @cTrf

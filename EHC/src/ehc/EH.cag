@@ -7,7 +7,7 @@
 %%% Haskell importable interface to EH/AbsSyn
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%[1 hs module {%{EH}EH} import({%{EH}Base.Common},{%{EH}Base.Builtin})
+%%[1 hs module {%{EH}EH} import({%{EH}Base.Common},{%{EH}Base.TermLike},{%{EH}Base.Builtin})
 %%]
 
 %%[1 hs export(AGItf(..), Decl(..), Decls, TyExpr(..), Expr(..), PatExpr(..))
@@ -117,12 +117,12 @@ mkUnit :: Range -> Expr
 mkUnit r = rngLift r Expr_Rec (rngLift r RecExpr_Empty)
 %%]
 mkUnit :: Range -> Expr
-mkUnit _ = semCon (hsnProd 0)
+mkUnit _ = appCon (hsnProd 0)
 
 %%[5 hs
 mkError':: HsName -> Range -> String -> Expr
 mkError' e r m
-  = mkApp [rngLift r Expr_Var e,mkStr r (show r ++ ": " ++ m)]
+  = appTopApp [rngLift r Expr_Var e,mkStr r (show r ++ ": " ++ m)]
 
 mkError :: Range -> String -> Expr
 mkError = mkError' hsnError
@@ -206,18 +206,18 @@ mkEH = rngLift emptyRange
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% SemApp class instances
+%%% AppLike class instances
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%[1 hs
-instance SemApp Expr where
-  semRngApp    r  = rngLift r Expr_App
-  semRngAppTop r  = rngLift r Expr_AppTop
-  semRngVar    r  = rngLift r Expr_Var . mkHNm
-  semRngCon    r  = rngLift r Expr_Con . mkHNm
-  semRngParens r  = rngLift r Expr_Parens
+instance AppLike Expr () {- ExprAnn () -} where
+  appRngApp1   r  = rngLift r Expr_App
+  appRngTop    r  = rngLift r Expr_AppTop
+  appRngVar    r  = rngLift r Expr_Var . mkHNm
+  appRngCon    r  = rngLift r Expr_Con . mkHNm
+  appRngPar    r  = rngLift r Expr_Parens
 %%[[7
-  mkProdApp l
+  appProdApp l
     = mkEH Expr_Rec $ mkEH RecExpr_Empty `mkRow` l
     where mkRow = foldl (\r e -> mkEH RecExpr_Ext r Nothing e)
 %%]]
@@ -225,65 +225,69 @@ instance SemApp Expr where
 
 
 %%[1 hs
-instance SemApp PatExpr where
-  semRngApp    r  = rngLift r PatExpr_App
-  semRngAppTop r  = rngLift r PatExpr_AppTop
-  semRngVar    r  = rngLift r PatExpr_Var . mkHNm
-  semRngCon    r  = rngLift r PatExpr_Con . mkHNm
-  semRngParens r  = rngLift r PatExpr_Parens
+instance AppLike PatExpr () {- PatExprAnn () -} where
+  appRngApp1   r  = rngLift r PatExpr_App
+  appRngTop    r  = rngLift r PatExpr_AppTop
+  appRngVar    r  = rngLift r PatExpr_Var . mkHNm
+  appRngCon    r  = rngLift r PatExpr_Con . mkHNm
+  appRngPar    r  = rngLift r PatExpr_Parens
 %%[[7
-  mkProdApp l
+  appProdApp l
     = mkEH PatExpr_Rec $ mkEH RecPatExpr_Empty `mkRow` l
     where mkRow = foldl (\r e -> mkEH RecPatExpr_Ext r Nothing e)
 %%]]
 %%]
 
 %%[1 hs
-instance SemApp TyExpr where
-  semRngApp    r  = rngLift r TyExpr_App
-  semRngAppTop r  = rngLift r TyExpr_AppTop
+instance AppLike TyExpr () {- TyExprAnn () -} where
+  appRngApp1   r  = rngLift r TyExpr_App
+  appRngTop    r  = rngLift r TyExpr_AppTop
 %%[[1
-  semRngVar       = semRngCon
+  appRngVar       = appRngCon
 %%][3
-  semRngVar    r  = rngLift r TyExpr_Var . mkHNm
+  appRngVar    r  = rngLift r TyExpr_Var . mkHNm
 %%]]
-  semRngCon    r  = rngLift r TyExpr_Con . mkHNm
-  semRngParens r  = rngLift r TyExpr_Parens
+  appRngCon    r  = rngLift r TyExpr_Con . mkHNm
+  appRngPar    r  = rngLift r TyExpr_Parens
 %%[[7
-  mkProdApp l
+  appProdApp l
     = mkEH TyExpr_Row $ mkEH RowTyExpr_Empty `mkRow` l
     where mkRow = foldl (\r e -> mkEH RowTyExpr_Ext r Nothing e)
 %%]]
 %%[[1
-  unTop (TyExpr_AppTop   x)       = unTop x
-  unTop (TyExpr_Parens   x)       = unTop x
-  unTop (TyExpr_Ann    _ x)       = unTop x
+  appMbAnn1 (TyExpr_Ann    a x)   = Just (x, TyExpr_Ann   a)
 %%][99
-  unTop (TyExpr_AppTop _ x)       = unTop x
-  unTop (TyExpr_Parens _ x)       = unTop x
-  unTop (TyExpr_Ann  _ _ x)       = unTop x
+  appMbAnn1 (TyExpr_Ann    r a x) = Just (x, TyExpr_Ann r a)
 %%]]
-  unTop x                         = x
+  appMbAnn1 _                     = Nothing
 %%[[1
-  isApp1 (TyExpr_App   f a)       = Just (f,a)
+  appMbTop1 (TyExpr_AppTop   x)   = Just (x, TyExpr_AppTop  )
+  appMbTop1 (TyExpr_Parens   x)   = Just (x, TyExpr_Parens  )
 %%][99
-  isApp1 (TyExpr_App _ f a)       = Just (f,a)
+  appMbTop1 (TyExpr_AppTop r   x) = Just (x, TyExpr_AppTop r)
+  appMbTop1 (TyExpr_Parens r   x) = Just (x, TyExpr_Parens r)
 %%]]
-  isApp1 _                        = Nothing
+  appMbTop1 x                     = appMbAnn1 x
 %%[[1
-  isCon (TyExpr_Con   n)          = Just n
+  appMbApp1 (TyExpr_App   f a)    = Just (f,a)
 %%][99
-  isCon (TyExpr_Con _ n)          = Just n
+  appMbApp1 (TyExpr_App _ f a)    = Just (f,a)
 %%]]
-  isCon _                         = Nothing
+  appMbApp1 _                     = Nothing
+%%[[1
+  appMbCon (TyExpr_Con   n)       = Just n
+%%][99
+  appMbCon (TyExpr_Con _ n)       = Just n
+%%]]
+  appMbCon _                      = Nothing
 %%]
 
 %%[6 hs
-instance SemApp KiExpr where
-  semRngApp    r  = rngLift r KiExpr_App
-  semRngAppTop r  = rngLift r KiExpr_AppTop
-  semRngVar    r  = rngLift r KiExpr_Var . mkHNm
-  semRngCon    r  = rngLift r KiExpr_Con . mkHNm
-  semRngParens r  = rngLift r KiExpr_Parens
+instance AppLike KiExpr () {- KiExprAnn () -} where
+  appRngApp1   r  = rngLift r KiExpr_App
+  appRngTop    r  = rngLift r KiExpr_AppTop
+  appRngVar    r  = rngLift r KiExpr_Var . mkHNm
+  appRngCon    r  = rngLift r KiExpr_Con . mkHNm
+  appRngPar    r  = rngLift r KiExpr_Parens
 %%]
 

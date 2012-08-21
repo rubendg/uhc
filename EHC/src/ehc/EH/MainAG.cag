@@ -7,7 +7,7 @@
 %%% Haskell interface to AG generated code for compiler
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%[1 hs module {%{EH}EH.MainAG} import(Data.Char,Data.List as List,EH.Util.Pretty,{%{EH}Base.Common},{%{EH}Base.Builtin},{%{EH}Opts}, {%{EH}Gam.Full},{%{EH}Error},{%{EH}Error.Pretty}, {%{EH}EH})
+%%[1 hs module {%{EH}EH.MainAG} import(Data.Char,Data.List as List,EH.Util.Pretty,{%{EH}Base.Common},{%{EH}Base.TermLike},{%{EH}Base.Builtin},{%{EH}Opts}, {%{EH}Gam.Full},{%{EH}Error},{%{EH}Error.Pretty}, {%{EH}EH})
 %%]
 
 %%[(1 hmtyinfer || hmtyast).Ty hs import({%{EH}Ty})
@@ -71,6 +71,13 @@
 %%]
 %%[(8 codegen) hs import({%{EH}LamInfo})
 %%]
+%%[(8 codegen) hs import(qualified {%{EH}Core.SysF.AsTy} as SysF, {%{EH}FinalEnv})
+%%]
+%%[(8 codegen coresysf) hs import({%{EH}Core.BindExtract})
+%%]
+%%[(8 codegen) hs import({%{EH}Core.Subst})
+%%]
+
 %%[(90 codegen) hs import({%{EH}BuiltinPrims},{%{EH}Foreign})
 %%]
 
@@ -83,13 +90,13 @@
 %%[(9 codegen) hs import({%{EH}Base.Target})
 %%]
 
-%%[(9 codegen) hs import({%{EH}Core.Subst},{%{EH}Core.Coercion})
+%%[(9 codegen) hs import({%{EH}Core.Coercion})
 %%]
 
 %%[(9 hmtyinfer) hs import({%{EH}Ty.Trf.MergePreds},{%{EH}Ty.Trf.Canonic})
 %%]
 
-%%[(9 hmtyinfer) hs import({%{EH}Pred},{%{EH}Pred.RedGraph}(redPruneReductionsUntil),{%{EH}CHR},{%{EH}CHR.Constraint},{%{EH}Pred.CHR},{%{EH}Pred.ToCHR},{%{EH}Pred.Heuristics},{%{EH}CHR.Solve})
+%%[(9 hmtyinfer) hs import({%{EH}Gam.ClGam},{%{EH}Pred},{%{EH}Pred.RedGraph}(redPruneReductionsUntil),{%{EH}CHR},{%{EH}CHR.Constraint},{%{EH}Pred.CHR},{%{EH}Pred.ToCHR},{%{EH}Pred.Heuristics},{%{EH}CHR.Solve})
 %%]
 
 %%[(9 codegen) hs import({%{EH}Pred.EvidenceToCore})
@@ -195,6 +202,8 @@ WRAPPER AGItf
 
 %%[(8 codegen) ag import({EH/ToCore})
 %%]
+%%[(8 hmtyinfer codegen) ag import({EH/SysfTy},{EH/SysfEnv})
+%%]
 %%[(8 codegen tycore) ag import({EH/ToTyCore})
 %%]
 %%[8 ag import({EH/GatherMisc})
@@ -267,12 +276,19 @@ ATTR AGItf [ isMainMod: Bool | | ]
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Is a lam a top/first lam?
+%%% Is a lam a top/first lam? Or: what is the context?
 %%% Is let a first let in a sequence of lets?
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%[1 hs
+data ExprCtxt
+  = ExprCtxt_Top | ExprCtxt_Lam | ExprCtxt_Internal
+  deriving Eq
+%%]
+
 %%[1
-ATTR Expr [ isTopLam: Bool | | ]
+ATTR Expr [ exprCtxt: ExprCtxt | | ]
+-- ATTR Expr [ isTopLam: Bool | | ]
 ATTR Expr [ isFirstLet: Bool | | ]
 
 SEM Decl
@@ -284,11 +300,13 @@ SEM Decl
     FFE
 %%]]
                 expr        .   isFirstLet          =   True
-                            .   isTopLam            =   True
+                            -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Top
 
 SEM AGItf
   | AGItf       expr        .   isFirstLet          =   True
-                            .   isTopLam            =   True
+                            -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Top
 
 
 SEM Expr
@@ -300,35 +318,41 @@ SEM Expr
 %%[[12
     LamImpl
 %%]]
-                body        .   isTopLam            =   False
-  | * - Lam
+                body        -- .   isTopLam            =   False
+                            .   exprCtxt            =   ExprCtxt_Lam
+  | * - Lam Parens
 %%[[12
     LamImpl
 %%]]
-                loc         .   isTopLam            =   True
+                loc         -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Internal
 %%]
 
 %%[5
 SEM CaseAlt
   | Pat         expr        .   isFirstLet          =   True
-                            .   isTopLam            =   True
+                            -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Top
 %%]
 
 %%[7
 SEM DataFieldExpr
   | Upd Expr    expr        .   isFirstLet          =   True
-                            .   isTopLam            =   True
+                            -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Top
 
 SEM RecExpr
   | Upd Expr Ext
                 expr        .   isFirstLet          =   True
-                            .   isTopLam            =   True
+                            -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Top
 %%]
 
 %%[97
 SEM PatExpr
   | Expr        expr        .   isFirstLet          =   True
-                            .   isTopLam            =   True
+                            -- .   isTopLam            =   True
+                            .   exprCtxt            =   ExprCtxt_Top
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -540,6 +564,17 @@ For patterns we need a unique value anyway, so declare it here globally
 %%[2.PatExpr.g
 SEM PatExpr
   | *           loc         .   lUniq               :   UNIQUEREF gUniq
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Strictness from letstrict
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen)
+ATTR AllDecl [ isStrict: Bool | | ]
+
+SEM Expr
+  | Let         decls       .   isStrict    =   @isStrict
 %%]
 
 

@@ -88,7 +88,7 @@
 %%[50 import(Control.Monad, {%{EH}Base.Binary}, {%{EH}Base.Serialize})
 %%]
 
-%%[99 import({%{EH}Base.Hashable})
+%%[9999 import({%{EH}Base.Hashable})
 %%]
 %%[9999 import({%{EH}Base.ForceEval})
 %%]
@@ -154,113 +154,6 @@ mkPrIdCHR = mkPrId
 %%[9 export(emptyPredOccId)
 emptyPredOccId :: PredOccId
 emptyPredOccId = mkPrId uidStart
-%%]
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Semantics classes
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%[1.SemApp export(SemApp(..))
-%%[[SemAppCore1
-class SemApp a where
-  -- basic semantics
-  semApp            ::  a -> a -> a
-  semAppTop         ::  a -> a
-  semVar            ::  (Position n,HSNM n) => n -> a
-  semCon            ::  (Position n,HSNM n) => n -> a
-  semParens         ::  a -> a
-%%]]
-  -- basic semantics with Range
-  semRngApp         ::  Range -> a -> a -> a
-  semRngAppTop      ::  Range -> a -> a
-  semRngVar         ::  (Position n,HSNM n) => Range -> n -> a
-  semRngCon         ::  (Position n,HSNM n) => Range -> n -> a
-  semRngParens      ::  Range -> a -> a
-  -- constructing
-%%[[SemAppCore2
-  mkApp             ::  [a] -> a
-  mkConApp          ::  (Position n,HSNM n) => n -> [a] -> a
-  mkProdApp         ::  [a] -> a
-  mk1Arrow          ::  a -> a -> a
-  mkArrow           ::  [a] -> a -> a
-%%]]
-  mk1App            ::  a -> a -> a
-  mk1ConApp         ::  (Position n,HSNM n) => n -> a -> a
-  -- constructin with Range
-  mk1RngApp         ::  Range -> a -> a -> a
-  mkRngApp          ::  Range -> [a] -> a
-  mkRngProd         ::  Range -> [a] -> a
-  
-  -- inspection/deconstruction
-  unTop				:: a -> a
-  isCon             :: a -> Maybe (HsName)
-  isApp1            :: a -> Maybe (a,a)
-  isApp             :: a -> Maybe (a,[a])
-  isConApp          :: a -> Maybe (HsName,[a])
-  isArrow           :: a -> Maybe ([a],a)
-  unArrow           :: a -> ([a],a)
-
-  -- defaults semantics
-  semApp            =   semRngApp    emptyRange
-  semAppTop         =   semRngAppTop emptyRange
-  semVar            =   semRngVar    emptyRange
-  semCon            =   semRngCon    emptyRange
-  semParens         =   semRngParens emptyRange
-  semRngApp    _    =   semApp
-  semRngAppTop _    =   semAppTop
-  semRngVar    _    =   semVar
-  semRngCon    _    =   semCon
-  semRngParens _    =   semParens
-  -- defaults
-  mkApp             =   mkRngApp emptyRange
-  mk1App     a r    =   mkApp [a,r]
-  mkConApp   c as   =   mkApp (semCon c : as)
-  mk1ConApp  c a    =   mkConApp c [a]
-  mkProdApp  as     =   mkConApp (hsnProd (length as)) as
-  mk1Arrow   a r    =   mkApp [semCon hsnArrow,a,r]
-  mkArrow           =   flip (foldr mk1Arrow)
-  -- defaults with Range
-  mkRngProd rng     =   mkProdApp               -- to be done
-  mk1RngApp rng a r =   mkRngApp rng [a,r]
-  mkRngApp  rng as  =   case as of
-                          [a] -> a
-                          _   -> semRngAppTop rng (foldl1 (semRngApp rng) as)
-
-  -- default inspection
-  unTop             = id
-  isCon             = const Nothing
-  isApp1            = const Nothing
-  isApp     x       = do { (f1,a) <- isApp1 $ unTop x
-                         ; (do {(f2,as) <- isApp f1; return (f2,as++[a])}) <|> (return (f1,[a]))
-                         }
-  isConApp  x       = do { (f,as) <- isApp x
-                         ; c <- isCon f
-                         ; return (c,as)
-                         }
-  unArrow   x       = case isApp x of
-                        Just (fx,asx) -> case isCon fx of
-                                           Just con | hsnIsArrow con -> (arg:as,r)
-                                                                     where [arg,res] = asx
-                                                                           (as,r) = unArrow res
-                                           _                         -> dflt
-                        _             -> dflt
-                    where dflt = ([],x)
-  isArrow   x       = case unArrow x of
-                        a@((_:_),_) -> Just a
-                        _           -> Nothing
-                         
-%%]
-
-%%[1 export(mkRngProdOpt)
-mkRngProdOpt :: SemApp e => Range -> [e] -> e
-mkRngProdOpt r [e] = e
-mkRngProdOpt r es  = mkRngProd r es
-%%]
-
-%%[1 export(mkRngParApp)
-mkRngParApp :: SemApp e => Range -> [e] -> e
-mkRngParApp r [a] = a
-mkRngParApp r as  = semRngParens r (mkRngApp r as)
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -492,6 +385,33 @@ ppCTagInt = ctag (pp "-1") (\_ _ t _ _ -> pp t)
 
 instance PP CTag where
   pp = ppCTag
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Label for expr
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[8 hs export(CLbl(..),clbl)
+-- | Expressions in a CBound position optionally may be labelled
+data CLbl
+  = CLbl_None
+  | CLbl_Nm
+      { clblNm		:: !HsName
+      }
+  | CLbl_Tag
+      { clblTag		:: !CTag
+      }
+  deriving (Show,Eq,Ord)
+
+clbl :: a -> (HsName -> a) -> (CTag -> a) -> CLbl -> a
+clbl f _ _  CLbl_None   = f
+clbl _ f _ (CLbl_Nm  n) = f n
+clbl _ _ f (CLbl_Tag t) = f t
+%%]
+
+%%[8 hs
+instance PP CLbl where
+  pp = clbl empty pp pp
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -901,82 +821,6 @@ data Backend
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Instances: ForceEval
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-%%[9999
-instance ForceEval Fixity
-%%[[102
-  where
-    fevCount x | x `seq` True = cm1 "Fixity"
-%%]]
-
-instance ForceEval OrigName where
-  forceEval x@(OrigLocal  n) | forceEval x `seq` True = x
-  forceEval x@(OrigGlobal n) | forceEval x `seq` True = x
-  forceEval x@(OrigFunc   n) | forceEval x `seq` True = x
-  forceEval x                                         = x
-
-instance ForceEval HsName where
-  -- forceEval x@(HsName_Base     s) | forceEval s `seq` True = x
-  -- forceEval x@(HNmNr _ n) | forceEval n `seq` True = x
-  -- forceEval x@(HNmQ    l) | forceEval l `seq` True = x
-  forceEval x                                      = x
-%%[[102
-  fevCount (HsName_Base   _ s) = cm1 "HNm"   `cmUnion` fevCount s
-  fevCount (HNmNr i n) = cm1 "HNmNr" `cmUnion` fevCount n
-  fevCount (HNmQ  _ l) = cm1 "HNmQ"  `cmUnion` fevCount l
-  fevCount (HsName_Pos   p) = cm1 "HsName_Pos" `cmUnion` fevCount p
-%%]]
-
-instance ForceEval CTag where
-  forceEval x@(CTag tn n t a ma) | forceEval tn `seq` forceEval n `seq` True = x
-  forceEval x = x
-%%[[102
-  fevCount (CTag tn n t a ma) = cmUnions [cm1 "CTag",fevCount tn,fevCount n,fevCount t,fevCount a,fevCount ma]
-  fevCount CTagRec            = cm1 "CTagRec"
-%%]]
-
-instance ForceEval Range where
-  forceEval x@(Range_Range b e) | forceEval b `seq` forceEval e `seq` True = x
-  forceEval x = x
-%%[[102
-  fevCount (Range_Range b e) = cm1 "Range_Range" `cmUnion` fevCount b `cmUnion` fevCount e
-  fevCount Range_Unknown     = cm1 "Range_Unknown"
-  fevCount Range_Builtin     = cm1 "Range_Builtin"
-%%]]
-
-instance ForceEval Pos where
-  forceEval x@(Pos l c f) | forceEval l `seq` forceEval c `seq` forceEval f `seq` True = x
-%%[[102
-  fevCount (Pos l c f) = cm1 "Pos" `cmUnion` fevCount l `cmUnion` fevCount c `cmUnion` fevCount f
-%%]]
-
-instance ForceEval IdOcc
-%%[[102
-  where
-    fevCount (IdOcc x y) = cm1 "IdOcc" `cmUnion` fevCount x `cmUnion` fevCount y
-%%]]
-
-%%[[102
-instance ForceEval IdOccKind where
-  fevCount x | x `seq` True = cm1 "IdOccKind_*"
-%%]]
-
-instance ForceEval UID where
-  forceEval x@(UID _ l) | forceEval l `seq` True = x
-%%[[102
-  fevCount (UID _ l) = cm1 "UID" `cmUnion` fevCount l
-%%]]
-
-instance ForceEval a => ForceEval (RLList a) where
-  forceEval x@(RLList l) | forceEval l `seq` True = x
-%%[[102
-  fevCount (RLList l) = cm1 "RLList" `cmUnion` fevCount l
-%%]]
-%%]
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Fake AG dependency: first param is not used, only introduces an AG dependency
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -1231,7 +1075,7 @@ data DerivTreeWay
 %%% Row specific
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%[7 hs export(rowCanonOrderBy)
+%%[7777 hs export(rowCanonOrderBy)
 -- order on ...
 rowCanonOrderBy :: (o -> o -> Ordering) -> AssocL o a -> AssocL o a
 rowCanonOrderBy cmp = sortByOn cmp fst
@@ -1276,6 +1120,9 @@ deriving instance Data PredOccId
 
 deriving instance Typeable1 RLList
 deriving instance Data x => Data (RLList x)
+
+deriving instance Typeable CLbl
+deriving instance Data CLbl
 
 deriving instance Typeable CTag
 deriving instance Data CTag
@@ -1325,6 +1172,16 @@ instance Serialize VarUIDHsName where
               0 -> liftM2 VarUIDHs_Name sget sget
               1 -> liftM  VarUIDHs_UID  sget
               2 -> liftM  VarUIDHs_Var  sget
+
+instance Serialize CLbl where
+  sput (CLbl_Nm   a  ) = sputWord8 0 >> sput a
+  sput (CLbl_Tag  a  ) = sputWord8 1 >> sput a
+  sput (CLbl_None    ) = sputWord8 2
+  sget = do t <- sgetWord8
+            case t of
+              0 -> liftM  CLbl_Nm 	sget
+              1 -> liftM  CLbl_Tag  sget
+              2 -> return CLbl_None
 
 instance Binary Fixity where
   put = putEnum8

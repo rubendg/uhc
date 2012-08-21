@@ -18,12 +18,12 @@ viewhierarchy = E < K < C < HM < I1 < EX < DT < CG < P < TS < EP < MD < NUM < HS
 -------------------------------------------------------------------------
 
 -- Ty for expr
-format ag def  (a | Ty) -> (r | t) = ([a] `mkArrow` (r) | t)
-format ag def  (p | Ty) => (a | Ty) -> (r | t) = ([p,a] `mkArrow` (r) | t)
-format ag def  (a | TyL) -> (r | t) = ((a) `mkArrow` (r) | t)
+format ag def  (a | Ty) -> (r | t) = ([a] `appArr` (r) | t)
+format ag def  (p | Ty) => (a | Ty) -> (r | t) = ([p,a] `appArr` (r) | t)
+format ag def  (a | TyL) -> (r | t) = ((a) `appArr` (r) | t)
 
-format ag use ((a|Ty) -> r) `=` v = (a,r) `=` tyArrowArgRes (v)
-format ag use ((...) -> r) `=` v = r `=` tyArrowRes (v)
+format ag use ((a|Ty) -> r) `=` v = (a,r) `=` appUn1Arr (v)
+format ag use ((...) -> r) `=` v = r `=` appUnArrRes (v)
 format ag use (p => a -> r) `=` v = (p,a,r) `=` tyArrowImplsArgRes (v)
 
 -- VarMp
@@ -148,7 +148,7 @@ format ag ANY = (Ty_Any|Ty)
 format ag ity = imprTy
 format ag ty.ident = gTy
 
-format ag  tyString2 = "(Ty_Con (ehbnPrelString $ ehcOptBuiltinNames @lhs.opts))"
+format ag  tyString2 = "(appCon (ehbnPrelString $ ehcOptBuiltinNames @lhs.opts))"
 format tex tyString2 = tyString
 
 -- tvars
@@ -281,7 +281,7 @@ format ag pTopPatK = patExpr
 format ag pExpr = patExpr
 
 -- Translation from TyExpr to Ty
-format ag tyexprCon = Ty_Con
+format ag tyexprCon = appCon
 format ag tyexprQuant = Ty_Quant
 
 -- Translation to core (CExpr)
@@ -3096,7 +3096,7 @@ relation tyEnsureTVar =
     holes [ ty.e: Ty | | ty.v: Ty, cnstr: VarMp, tvarv: TyVarId ]
     judgespec ty.v, cnstr, tvarv === ty.e
     judgeuse tex ty.v === tvarv ^^ && ^^ cnstr === [tvarv :-> ty.e] ^^ && ^^ tvarv (text "fresh")
-    judgeuse ag (ty.v,cnstr) `=` tyAsVarMp unique (ty.e)
+    judgeuse ag (ty.v,cnstr) `=` tyAsVarMp' unique (ty.e)
 
 -------------------------------------------------------------------------
 -- Partitioning of alt ty
@@ -3156,7 +3156,7 @@ relation mkPatFunProdTy =
     judgespec pty === nm
     judgeuse tex pty === ((ty).1, (...), (ty).n) -> ((ty).1, (...), (ty).n), ^^^ n === `|` nm `|`
     judgeuse ag pty `=` ( let  prTy `=` mkTyFreshProdFrom unique (hsnProdArity nm)
-                        - in   ([prTy] `mkArrow` prTy)
+                        - in   ([prTy] `appArr` prTy)
                         )
     
 -------------------------------------------------------------------------
@@ -3168,7 +3168,7 @@ relation mkProdTy =
     holes [ tyl: TyL | | pty: Ty ]
     judgespec pty === tyl
     judgeuse tex pty === ((ty).1, (...), (ty).n), ^^^ [(ty).1, (...), (ty).n] === tyl
-    judgeuse ag pty `=` mkProdApp (tyl)
+    judgeuse ag pty `=` appProdApp (tyl)
     
 -------------------------------------------------------------------------
 -- Construct prod ty, for use in PatExpr.AppTop combined with tyInitLastProd

@@ -54,8 +54,8 @@ SEM Decl
 SEM Decl
   | Data        loc         .   inconsistFldErrs    =   let  ft = gamToOnlyDups @constrs.fldSelGam
                                                              wrong tl = foHasErrs fo
-                                                                      where fo = fitsInFold opts @fe uidStart @lhs.finTyVarMp $ map (tyArrowRes . vgiTy) $ tl
-                                                                            (tlvars,tl') = unzip [ (varFreeSet t', t') | t <- tl, let t' = tyArrowRes (vgiTy t) ]
+                                                                      where fo = fitsInFold opts @fe uidStart @lhs.finTyVarMp $ map (appUnArrRes . vgiTy) $ tl
+                                                                            (tlvars,tl') = unzip [ (varFreeSet t', t') | t <- tl, let t' = appUnArrRes (vgiTy t) ]
                                                                             opts = unifyFIOpts { fioDontBind = Set.unions tlvars }
                                                              nms = [ f | (f,tl) <- ft, wrong tl ]
                                                         in   if null nms then [] else [rngLift @range Err_InconsistentIntros "data field" nms]
@@ -100,7 +100,7 @@ SEM Expr
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% Predicates
+%%% Predicates: unproven
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%[(9 hmtyinfer).checkClNms hs
@@ -185,6 +185,15 @@ SEM Expr
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Predicates: mutual recursive defs should abstract over same set of predicates
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+20120521 But: how to check this in the presence of explicit annotations?
+
+%%[(9 hmtyinfer)
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Deriving
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -228,7 +237,7 @@ SEM Decl
 %%[(93 hmtyinfer)
 SEM Decl
   | FusionConv          loc .   foBuildInverse      =   let opts = unifyFIOpts { fiMbMkErrClash = Just $ rngLift @range Err_FusionBuildInverse }
-                                                        in  fitsIn opts @fe @lUniq_buildInverse @lhs.finTyVarMp @finConTy (tyArrowInverse @finAbsTy)
+                                                        in  fitsIn opts @fe @lUniq_buildInverse @lhs.finTyVarMp @finConTy (appArrInverse @finAbsTy)
                         loc .   lUniq_buildInverse  :   UNIQUEREF gUniq
 %%]
 

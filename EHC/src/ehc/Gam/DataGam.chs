@@ -8,7 +8,7 @@
 %%[7 import(EH.Util.Pretty,EH.Util.Utils)
 %%]
 
-%%[7 hs import ({%{EH}Base.Common},{%{EH}Base.Builtin})
+%%[7 hs import ({%{EH}Base.Common},{%{EH}Base.TermLike},{%{EH}Base.Builtin})
 %%]
 %%[7 hs import ({%{EH}Ty},{%{EH}Ty.Pretty})
 %%]
@@ -101,7 +101,7 @@ type DataConstrTagMp = Map.Map HsName DataTagInfo
 
 emptyDataTagInfo
   = DataTagInfo
-      Map.empty [] [] hsnUnknown Ty_Any
+      Map.empty [] [] hsnUnknown (appDbg "emptyDataTagInfo")
 %%[[8
       emptyCTag
 %%]]
@@ -142,6 +142,7 @@ data DataGamInfo
   = DataGamInfo
       { dgiTyNm      		:: !HsName				-- type name (duplicate of key of gamma leading to this info)
       , dgiDataTy 			:: !Ty					-- the type sum of product
+      , dgiDataKi 			:: !Ty					-- the kind
 %%[[50
       , dgiConstrNmL 		:: ![HsName]			-- all constructor names
 %%]]
@@ -184,23 +185,24 @@ type DataGam = Gam HsName DataGamInfo
 
 %%[(7 hmtyinfer) export(mkDGI)
 %%[[7
-mkDGI :: HsName -> Ty -> [HsName] -> DataConstrTagMp -> Bool -> DataGamInfo
+mkDGI :: HsName -> Ty -> Ty -> [HsName] -> DataConstrTagMp -> Bool -> DataGamInfo
 %%][90
 mkDGI
   :: HsName
-     -> Ty -> [HsName] -> DataConstrTagMp -> DataGamInfoVariant
+     -> Ty -> Ty -> [HsName] -> DataConstrTagMp -> DataGamInfoVariant
 %%[[92
      -> Maybe Int
 %%]]
      -> DataGamInfo
 %%]]
-mkDGI tyNm dty cNmL m nt
+mkDGI tyNm dty ki cNmL m nt
 %%[[92
       mbGener
 %%]]
   = DataGamInfo
       tyNm
       dty
+      ki
 %%[[50
       cNmL
 %%]]
@@ -219,9 +221,9 @@ mkDGI tyNm dty cNmL m nt
 %%]
 
 %%[7 export(mkDGIPlain)
-mkDGIPlain :: HsName -> Ty -> [HsName] -> DataConstrTagMp -> DataGamInfo
-mkDGIPlain tyNm dty cNmL m
-  = mkDGI tyNm dty cNmL m
+mkDGIPlain :: HsName -> Ty -> Ty -> [HsName] -> DataConstrTagMp -> DataGamInfo
+mkDGIPlain tyNm dty dki cNmL m
+  = mkDGI tyNm dty dki cNmL m
 %%[[7
           False
 %%][90
@@ -235,7 +237,7 @@ mkDGIPlain tyNm dty cNmL m
 
 %%[(7 hmtyinfer) export(emptyDataGamInfo,emptyDGI)
 emptyDataGamInfo, emptyDGI :: DataGamInfo
-emptyDataGamInfo = mkDGIPlain hsnUnknown Ty_Any [] Map.empty
+emptyDataGamInfo = mkDGIPlain hsnUnknown (appDbg "emptyDataGamInfo") (appDbg "mkDGIPlain")  [] Map.empty
 emptyDGI = emptyDataGamInfo
 %%]
 
@@ -274,14 +276,14 @@ dataGamDgiOfTy conTy dg = dataGamLookup (tyAppFunConNm conTy) dg
 %%[(8 hmtyinfer) export(dataGamDTIsOfTy)
 dataGamDTIsOfTy :: Ty -> DataGam -> Maybe [DataTagInfo]
 dataGamDTIsOfTy t g
-  = -- tr "dataGamDTIsOfTy" (t >#< tyAppFunConNm (tyArrowRes t)) $
+  = -- tr "dataGamDTIsOfTy" (t >#< tyAppFunConNm (appUnArrRes t)) $
     fmap
 %%[[8
       (Map.elems . dgiConstrTagMp)
 %%][91
       (assocLElts . dgiConstrTagAssocL)
 %%]]
-    $ gamLookup (tyAppFunConNm $ tyArrowRes t)
+    $ gamLookup (tyAppFunConNm $ appUnArrRes t)
     $ g
 %%]
 
@@ -383,10 +385,10 @@ instance Serialize DataFldInConstr where
 
 instance Serialize DataGamInfo where
 %%[[50
-  sput (DataGamInfo a b c d e f g) = sput a >> sput b >> sput c >> sput d >> sput e >> sput f >> sput g
-  sget = liftM7 DataGamInfo sget sget sget sget sget sget sget
-%%][92
   sput (DataGamInfo a b c d e f g h) = sput a >> sput b >> sput c >> sput d >> sput e >> sput f >> sput g >> sput h
   sget = liftM8 DataGamInfo sget sget sget sget sget sget sget sget
+%%][92
+  sput (DataGamInfo a b c d e f g h i) = sput a >> sput b >> sput c >> sput d >> sput e >> sput f >> sput g >> sput h >> sput i
+  sget = liftM9 DataGamInfo sget sget sget sget sget sget sget sget sget
 %%]]
 %%]

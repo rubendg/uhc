@@ -10,7 +10,7 @@
 %%[1 module {%{EH}HS.Parser} import(UU.Parsing, UU.Parsing.Offside, EH.Util.ParseUtils, UU.Scanner.GenToken, EH.Util.ScanUtils)
 %%]
 
-%%[1 import({%{EH}Base.Common}, {%{EH}Base.Builtin}, {%{EH}Scanner.Common}, {%{EH}Opts}, {%{EH}HS})
+%%[1 import({%{EH}Base.Common}, {%{EH}Base.Builtin}, {%{EH}Scanner.Common}, {%{EH}Base.TermLike}, {%{EH}Opts}, {%{EH}HS})
 %%]
 
 %%[1 import(System.IO)
@@ -68,8 +68,8 @@ pImpls = pPacked pOIMPL pCIMPL
 %%]
 
 %%[1.pApp
-pApp            ::   SemApp ep => HSParser ep -> HSParser ep
-pApp p          =    mkApp <$> pList1 p
+pApp            ::   AppLike a boundmeta => HSParser a -> HSParser a
+pApp p          =    appTopApp <$> pList1 p
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -132,6 +132,8 @@ pPragma' mk
           <$> pDERIVABLE_prag  <*> gtycon' tyconsym <*> var <*> qvar
       <|> (\t targ r -> mk r $ Pragma_ExcludeIfTarget (mkRange1 t) (map tokMkStr $ concat targ))
           <$> pEXCLUDEIFTARGET_prag  <*> pList1Sep pCOMMA (pList1 (conid <|> varid))
+      <|> (\t targ r -> mk r $ Pragma_OptionsUHC (mkRange1 t) (tokMkStr targ))
+          <$> pOPTIONSUHC_prag  <*> pStringTk
       )
 
 pPragma :: HSParser Pragma
@@ -775,7 +777,7 @@ pBody' opts addDecl
 
 %%[1.pType
         pType :: HSParser Type
-        pType =  pChainr (mk1Arrow <$ pRARROW) pTypeBase
+        pType =  pChainr (app1Arr <$ pRARROW) pTypeBase
 %%]
 %%[4.pType -1.pType
         pType' :: HSParser (Type,Range) -> (HSParser Type -> HSParser (Type,Int) -> HSParser (Type,Int)) -> HSParser Type
@@ -968,7 +970,9 @@ pBody' opts addDecl
           <|> pContextItemsPrefix2
 
         pContextItemsPrefixOpt :: HSParser ContextItems
-        pContextItemsPrefixOpt = pContextItemsPrefix <|> pSucceed []
+        pContextItemsPrefixOpt = pContextItemsPrefix 
+                             <|> pParens (pSucceed []) <* pDARROW
+                             <|> pSucceed []
 
         pTypeContextPrefix :: HSParser (Type -> Type)
         pTypeContextPrefix

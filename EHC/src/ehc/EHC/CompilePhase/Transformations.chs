@@ -15,6 +15,8 @@ Interface/wrapper to various transformations for Core, TyCore, etc.
 
 %%[8 import({%{EH}EHC.Common})
 %%]
+%%[(8 codegen) import({%{EH}Base.Optimize})
+%%]
 %%[8 import({%{EH}EHC.CompileUnit})
 %%]
 %%[8 import({%{EH}EHC.CompileRun})
@@ -49,8 +51,8 @@ Interface/wrapper to various transformations for Core, TyCore, etc.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%[(8 codegen) export(cpTransformCore)
-cpTransformCore :: HsName -> EHCompilePhase ()
-cpTransformCore modNm
+cpTransformCore :: OptimizationScope -> HsName -> EHCompilePhase ()
+cpTransformCore optimScope modNm
   = do { cr <- get
        ; let  (ecu,crsi,opts,fp) = crBaseInfo modNm cr
        ; cpMsg' modNm VerboseALot "Transforming Core ..." Nothing fp
@@ -66,15 +68,10 @@ cpTransformCore modNm
                              , trfcoreInhLamMp      = Core2GrSem.lamMp_Inh_CodeAGItf $ crsiCoreInh crsi
 %%]]
                              }
-              trfcoreOut = trfCore opts (Core2GrSem.dataGam_Inh_CodeAGItf $ crsiCoreInh crsi) modNm trfcoreIn
+              trfcoreOut = trfCore opts optimScope (Core2GrSem.dataGam_Inh_CodeAGItf $ crsiCoreInh crsi) modNm trfcoreIn
        
          -- put back result: Core
        ; cpUpdCU modNm $! ecuStoreCore (trfcoreCore trfcoreOut)
-
-         -- dump intermediate stages, if any
-       ; cpSeq [ cpOutputCoreModule False ("-" ++ show n ++ "-" ++ nm) "core" modNm c
-               | (n,(nm,c)) <- zip [1..] (trfcoreCoreStages trfcoreOut)
-               ]
 
          -- put back result: unique counter
        ; cpSetUID (trfcoreUniq trfcoreOut)
@@ -93,6 +90,13 @@ cpTransformCore modNm
          -- put back result: additional hidden exports, it should be in a cpFlowXX variant
        ; cpUpdHiddenExports modNm $ zip (Set.toList $ trfcoreExtraExports trfcoreOut) (repeat IdOcc_Val)
 %%]]
+
+         -- dump intermediate stages, print errors, if any
+       ; cpSeq [ do { when (isJust mc) (cpOutputCoreModule False ("-" ++ show optimScope ++ "-" ++ show n ++ "-" ++ nm) "core" modNm (fromJust mc))
+                    ; cpSetLimitErrsWhen 5 ("Core errors: " ++ nm) err
+                    }
+               | (n,(nm,mc,err)) <- zip [1..] (trfcoreCoreStages trfcoreOut)
+               ]
        }
 %%]
 

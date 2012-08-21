@@ -7,7 +7,7 @@
 %%% Utilities for dealing with FFI, for now part of Core, meant for Grin gen
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%[(8 codegen) module {%{EH}Core.FFI} import({%{EH}Base.Builtin},{%{EH}Base.Builtin2},{%{EH}Opts},{%{EH}Base.Target},{%{EH}Base.Common})
+%%[(8 codegen) module {%{EH}Core.FFI} import({%{EH}Base.Builtin},{%{EH}Base.Builtin2},{%{EH}Opts},{%{EH}Base.Target},{%{EH}Base.Common},{%{EH}Base.TermLike})
 %%]
 
 %%[(8 codegen) hs import(qualified Data.Map as Map,Data.List,Data.Maybe)
@@ -16,7 +16,7 @@
 %%]
 %%[(8 codegen) hs import({%{EH}AbstractCore})
 %%]
-%%[(8 codegen) hs import({%{EH}Core},{%{EH}Core.Utils})
+%%[(8 codegen) hs import({%{EH}Core},{%{EH}Core.Utils},qualified {%{EH}Core.SysF.AsTy} as SysF)
 %%]
 %%[(8 codegen) hs import({%{EH}GrinCode})
 %%]
@@ -107,7 +107,7 @@ ffiMkArgUnpack
         mbAnn = tyNmFFIBoxBasicAnnot opts tyNm
         mk | isJust mbAnn                   = mkNodeI (tyNmGBTagPtrBasicAnnot opts False tyNm (fromJust mbAnn)) argNm
            | tyIsFFIEnumable tyNm dataGam   = mkEnumI argNm
-           | isJust (tyMbRecRow ty)         = mkVarI  argNm
+           | isJust (recMbRecRow ty)        = mkVarI  argNm
            | tyIsFFIOpaque ty dataGam       = mkOpaqI argNm
            | otherwise                      = mkPtrI  argNm
 %%]
@@ -164,7 +164,7 @@ ffiMkResPack
            | isRec                          = mkBindE res (mkPtrI  recNm                                                       resNm) (mkPtrE          resNm)
            | tyIsFFIOpaque resTy dataGam    = mkBindE res (mkOpaqI                                                             resNm) (mkOpaqE         resNm)
            | otherwise                      = mkBindE res (mkPtrI  resTyNm                                                     resNm) (mkPtrE          resNm)
-           where isRec = isJust $ tyMbRecRow resTy
+           where isRec = isJust $ recMbRecRow resTy
                  arity = length $ snd $ tyRecExts resTy
                  recNm = builtinRecNm arity
 %%]
@@ -262,7 +262,7 @@ We deal with IO as follow:
 -- | is type an IO type, if so return the IO type argument (result returned by IO)
 ffiMbIORes :: EHCOpts -> Ty -> Maybe Ty
 ffiMbIORes opts resTy
-  = case tyMbAppConArgs resTy of
+  = case appMbConApp resTy of
       Just (n,[a]) | ehcOptBuiltin opts ehbnIO == n
         -> Just a
       _ -> Nothing
@@ -292,12 +292,12 @@ ffiIOAdapt
      mkTupledRes
      uniq iores
   = ([tyState],[nmState],wrapRes)
-  where tyState = Ty_Con $ ehcOptBuiltin opts ehbnRealWorld
+  where tyState = appCon $ ehcOptBuiltin opts ehbnRealWorld
         [nmState,nmRes,nmIgnoreRes] = take 3 (map (mkUniqNm) (iterate uidNext uniq))
-        wrapRes = mkTupledRes nmState (acoreTyErr "ffiIOAdapt.mkTupledRes.state") nmRes (acoreTyErr "ffiIOAdapt.mkTupledRes.res") . dealWithUnitRes
+        wrapRes = mkTupledRes nmState (appDbg "ffiIOAdapt.mkTupledRes.state") nmRes (appDbg "ffiIOAdapt.mkTupledRes.res") . dealWithUnitRes
                 where dealWithUnitRes
                         = case tyMbRecExts iores of
-                            Just (_,[]) -> mkUnitRes nmIgnoreRes (acoreTyErr "ffiIOAdapt.mkUnitRes")
+                            Just (_,[]) -> mkUnitRes nmIgnoreRes (appDbg "ffiIOAdapt.mkUnitRes")
                             _           -> id
 %%]
 
@@ -336,8 +336,8 @@ ffiCoreIOAdapt
   = ffiIOAdapt
       opts
       mkHNm
-      (\          nmIgnoreRes ty r -> acoreLet1StrictTy nmIgnoreRes ty r $ acoreTup []                               )
-      (\nmState _ nmRes       ty r -> acoreLet1StrictTy nmRes       ty r $ acoreTup [acoreVar nmState,acoreVar nmRes])
+      (\          nmIgnoreRes ty r -> acoreLet1StrictTy nmIgnoreRes (SysF.ty2TyCforFFI opts ty) r $ acoreTup []                               )
+      (\nmState _ nmRes       ty r -> acoreLet1StrictTy nmRes       (SysF.ty2TyCforFFI opts ty) r $ acoreTup [acoreVar nmState,acoreVar nmRes])
       uniq iores
 %%]
 
@@ -372,19 +372,20 @@ ffiGrinEvalAdapt args res
       (\(n,_,i,ev) e -> GrExpr_Seq (if ev then GrExpr_Eval n else GrExpr_Unit (GrVal_Var n) GrType_None) i e)
       (\(n,_,e,ev) -> if ev then GrExpr_Seq e (GrPatLam_Var n) (GrExpr_Eval n) else e)
       (map addTy args) (addTy res)
-  where addTy (n,x,b) = (n,acoreTyErr "ffiGrinEvalAdapt",x,b)
+  where addTy (n,x,b) = (n,appDbg "ffiGrinEvalAdapt",x,b)
 %%]
 
 %%[(8 codegen) export(ffiCoreEvalAdapt)
 -- | evaluate value etc for ffi call, specialized for Core
 ffiCoreEvalAdapt
-  :: [(HsName,Ty,HsName,Bool)]				-- arg name + introduction + eval need
+  :: EHCOpts
+     -> [(HsName,Ty,HsName,Bool)]			-- arg name + introduction + eval need
      -> (HsName,Ty,CExpr,Bool)				-- result
      -> CExpr
-ffiCoreEvalAdapt
+ffiCoreEvalAdapt opts
   = ffiEvalAdapt
-      (\(n,ty,i,ev) e -> (if ev then acoreLet1StrictTy                     else acoreLet1PlainTy) i ty (acoreVar n) e)
-      (\(n,ty,e,ev)   ->  if ev then acoreLet1StrictTy n ty e (acoreVar n) else e               )
+      (\(n,ty,i,ev) e -> (if ev then acoreLet1StrictTy                                              else acoreLet1PlainTy) i (SysF.ty2TyCforFFI opts ty) (acoreVar n) e)
+      (\(n,ty,e,ev)   ->  if ev then acoreLet1StrictTy n (SysF.ty2TyCforFFI opts ty) e (acoreVar n) else e               )
 
 %%]
 
@@ -409,17 +410,17 @@ ffiCoreMk
      uniq rceEnv
      foreignEntInfo
      tyFFI
-  = acoreLamTy (zip nmArgL argTyL ++ zip nmArgLExtra (repeat $ acoreTyErr "ffiCoreMk.nmArgLExtra.TBD"))
-    $ ffiCoreEvalAdapt
+  = acoreLamTy (zip nmArgL (map (SysF.ty2TyCforFFI opts) argTyL) ++ zip nmArgLExtra (repeat $ acoreTyErr "ffiCoreMk.nmArgLExtra.TBD"))
+    $ ffiCoreEvalAdapt opts
         ( zip4 nmArgL argTyL nmArgPatL primArgNeedsEvalL )
         ( nmEvalRes
         , resTyAdapted
         , wrapRes
-          $ acoreApp (mkFFI $ argTyL `mkArrow` resTyAdapted)
+          $ acoreApp (mkFFI $ argTyL `appArr` resTyAdapted)
           $ map acoreVar nmArgPatL
         , primResNeedsEval
         )
-  where (argTyL,resTy) = tyArrowArgsRes tyFFI
+  where (argTyL,resTy) = appUnArr tyFFI
         argLen = length argTyL
         (_,u1,u2) = mkNewLevUID2 uniq
         (nmRes:nmEvalRes:nmArgL) = take (argLen + 2) (map mkHNm (iterate uidNext u1))
@@ -462,13 +463,13 @@ ffeCoreMk
      opts uniq rceEnv
      tyFFE
   = ( \e ->
-          acoreLamTy (zip nmArgL argTyL)
-          $ acoreLet1StrictTy nmEvalRes resTyAdapted
+          acoreLamTy (zipWith (\a t -> (a, SysF.ty2TyCforFFI opts t)) nmArgL argTyL)
+          $ acoreLet1StrictTy nmEvalRes (SysF.ty2TyCforFFI opts resTyAdapted)
               (wrapRes $ acoreApp e $ map acoreVar nmArgL ++ argLExtra)
               (acoreVar nmEvalRes)
-	, argTyL `mkArrow` resTyAdapted
+	, argTyL `appArr` resTyAdapted
 	)
-  where (argTyL,resTy) = tyArrowArgsRes tyFFE
+  where (argTyL,resTy) = appUnArr tyFFE
         argLen = length argTyL
         (nmRes:nmEvalRes:nmIOEvalRes:nmArgL) = map mkHNm $ mkNewLevUIDL (argLen+3) uniq
         (resTyAdapted,argLExtra,wrapRes)

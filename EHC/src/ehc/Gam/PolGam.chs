@@ -8,7 +8,7 @@
 %%[6 import(EH.Util.Pretty,EH.Util.Utils)
 %%]
 
-%%[6 hs import ({%{EH}Base.Common},{%{EH}Base.Builtin})
+%%[6 hs import ({%{EH}Base.Common},{%{EH}Base.TermLike},{%{EH}Base.Builtin})
 %%]
 %%[6 hs import ({%{EH}Ty},{%{EH}Ty.Pretty})
 %%]
@@ -74,12 +74,12 @@ polGamLookupErr n g
 initPolGam :: PolGam
 initPolGam
   = assocLToGam
-      [ (hsnArrow       	, mkPGI $ quant $ [mkPolNegate var, var] `mkArrow` var)
+      [ (hsnArrow       	, mkPGI $ quant $ [mkPolNegate var, var] `appArr` var)
       , (hsnInt         	, mkPGI   quantvar)
       , (hsnChar        	, mkPGI   quantvar)
-      , (hsnRec         	, mkPGI $ quant $ [var] `mkArrow` var)
+      , (hsnRec         	, mkPGI $ quant $ [var] `appArr` var)
 %%[[18
-      , (hsnRecUnboxed  	, mkPGI $ quant $ [var] `mkArrow` var)
+      , (hsnRecUnboxed  	, mkPGI $ quant $ [var] `appArr` var)
       , (hsnIntUnboxed  	, mkPGI quantvar)
 %%]]
 %%[[97

@@ -20,6 +20,8 @@ C + CPP compilation
 %%]
 %%[8 import({%{EH}EHC.CompileRun})
 %%]
+%%[(8 codegen) import({%{EH}Opts.CommandLine})
+%%]
 
 -- for now (20111121), not yet used
 %%[(8 codegen cmm) import(qualified {%{EH}Cmm}, qualified {%{EH}Cmm.ToC} as CmmSem)
@@ -41,9 +43,9 @@ C + CPP compilation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%[(8 codegen)
-gccDefs :: EHCOpts -> [String] -> [String]
+gccDefs :: EHCOpts -> [String] -> CmdLineOpts
 gccDefs opts builds
-  = map (\(d,mbval) -> "-D__UHC" ++ d ++ "__" ++ maybe "" ("=" ++) mbval)
+  = map (\(d,mbval) -> cppOpt $ CmdFlag_Define ("__UHC" ++ d ++ "__") mbval)
       $  [ (""                                                    , Just (Cfg.verAsNumber Cfg.version))
          , ("_TARGET_" ++ (map toUpper $ show $ ehcOptTarget opts), Nothing                           )
          ]
@@ -51,6 +53,7 @@ gccDefs opts builds
              builds
       ++ map (\x -> (x,Nothing))
              [ "_" ++ map (\c -> case c of {'.' -> '_'; c -> c}) (Cfg.verFull Cfg.version) ]
+
 %%]
 
 %%[(99 codegen)
@@ -82,9 +85,9 @@ cpCompileWithGCC how othModNmL modNm
                         = case how of
                             FinalCompile_Exec
                               -> ( fpExec
-                                 ,    ( if ehcOptOptimizationLevel opts >= OptimizationLevel_Much then ["-O2"] else if ehcOptOptimizationLevel opts >= OptimizationLevel_Normal then ["-O1"] else [] )
-                                   ++ [ Cfg.gccOpts, "-o", fpathToStr fpExec ]
-                                 , Cfg.ehcGccOptsStatic
+                                 ,    ( if ehcOptOptimizationLevel opts >= OptimizationLevel_Much then [gccOptF "O2"] else if ehcOptOptimizationLevel opts >= OptimizationLevel_Normal then [gccOptF "O1"] else [] )
+                                   ++ Cfg.gccOpts ++ [gccOptOutput $ fpathToStr fpExec]
+                                 , Cfg.ehcGccOptsStatic'
                                  ,
 %%[[99
                                       map (mkl2 Cfg.INST_LIB_PKG2)
@@ -93,22 +96,23 @@ cpCompileWithGCC how othModNmL modNm
 %%]]
                                       map (mkl Cfg.INST_LIB)
                                           Cfg.libnamesRts
-                                   ++ map (\l -> Cfg.mkInstallFilePrefix opts Cfg.INST_LIB_SHARED variant "" ++ Cfg.mkCLibFilename "" l) (Cfg.libnamesGcc opts)
-                                   ++ map ("-l" ++) Cfg.libnamesGccEhcExtraExternalLibs
+                                   ++ map (\l -> gccArg $ Cfg.mkInstallFilePrefix opts Cfg.INST_LIB_SHARED variant "" ++ Cfg.mkCLibFilename "" l) (Cfg.libnamesGcc opts)
+                                   ++ map gccOptLib Cfg.libnamesGccEhcExtraExternalLibs
                                  , 
 %%[[50
                                    if   ehcOptWholeProgOptimizationScope opts
                                    then [ ]
                                    else 
 %%]]
-                                        [ fpathToStr $ fpO m fp | m <- othModNmL2, let (_,_,_,fp) = crBaseInfo m cr ]
+                                        [ gccArg $ fpathToStr $ fpO m fp | m <- othModNmL2, let (_,_,_,fp) = crBaseInfo m cr ]
                                  , []
                                  )
                               where -- mkl  how l = Cfg.mkCLibFilename (Cfg.mkInstallFilePrefix opts how variant l) l
-                                    mkl how l = Cfg.mkInstalledRts opts Cfg.mkCLibFilename how variant l
+                                    mkl how l = gccArg $ Cfg.mkInstalledRts opts Cfg.mkCLibFilename how variant l
 %%[[99
                                     mkl2 how (l,d)
-                                               = Cfg.mkCLibFilename (d ++ "/")
+                                               = gccArg $ 
+                                                 Cfg.mkCLibFilename (d ++ "/")
                                                                     (showPkgKey l)
                                                {-
                                                = Cfg.mkCLibFilename (Cfg.mkInstallFilePrefix opts how variant (showPkgKey l) ++ "/" ++
@@ -118,7 +122,7 @@ cpCompileWithGCC how othModNmL modNm
                                                -}
 %%]]
                             FinalCompile_Module
-                              -> (o, [ Cfg.gccOpts, "-c", "-o", fpathToStr o ], Cfg.ehcGccOptsStatic, [], [], [o])
+                              -> (o, Cfg.gccOpts ++ [gccOptF "c", gccOptOutput $ fpathToStr o ], Cfg.ehcGccOptsStatic', [], [], [o])
                               where o = fpO modNm fp
 %%[[8
                  pkgKeyL    = [] :: [String]
@@ -129,18 +133,20 @@ cpCompileWithGCC how othModNmL modNm
 %%]]
          ;  when (targetIsC (ehcOptTarget opts))
                  (do { let compileC
-                             = mkShellCmd
-                                 (  [ Cfg.shellCmdGcc ]
-                                 ++ gccDefs opts ["O"]
-                                 ++ [ "-I" ++ Cfg.mkInstallFilePrefix opts Cfg.INST_INCLUDE variant "" ]
-                                 ++ [ "-I" ++ Cfg.mkInstallFilePrefix opts Cfg.INST_INCLUDE_SHARED variant "" ]
+                             = mkShellCmd' [Cmd_CPP, Cmd_C] Cfg.shellCmdGcc
+                                 (  gccDefs opts ["O"]
+                                 ++ [ cppOptI $ Cfg.mkInstallFilePrefix opts Cfg.INST_INCLUDE variant "" ]
+                                 ++ [ cppOptI $ Cfg.mkInstallFilePrefix opts Cfg.INST_INCLUDE_SHARED variant "" ]
 %%[[(99 codegen)
-                                 ++ [ "-I" ++ d | d <- gccInclDirs opts pkgKeyDirL ]
+                                 ++ [ cppOptI d | d <- gccInclDirs opts pkgKeyDirL ]
 %%]]
                                  ++ linkOpts
                                  ++ targOpt
+%%[[99
+                                 ++ ehcOptCmdLineOpts opts
+%%]]
                                  ++ dotOFilesOpt
-                                 ++ [ fpathToStr fpC ]
+                                 ++ [ gccArg $ fpathToStr fpC ]
                                  ++ linkLibOpt
                                  )
                      ; when (ehcOptVerbosity opts >= VerboseALot)
@@ -172,26 +178,21 @@ cpPreprocessWithCPP pkgKeyDirL modNm
        ; {- when (  ehcOptCPP opts
               || modNm == hsnModIntlBase      -- 20080211, AD: builtin hack to preprocess EHC.Prelude with cpp, for now, to avoid implementation of pragmas
               ) -}
-              (do { let defs    = [ "UHC", "TARGET_" ++ (map toUpper $ show $ ehcOptTarget opts) ]
-%%[[(99 codegen grin)
-                                  ++ (if targetDoesHPTAnalysis (ehcOptTarget opts) then ["UHC_FULL_PROGRAM_ANALYSIS"] else [])
-%%]]
-                        -- (pkgKeyL,_) = crPartitionIntoPkgAndOthers cr othModNmL
-                        preCPP  = mkShellCmd
-                                    (  [ Cfg.shellCmdCpp ]
-                                    ++ [ Cfg.cppOpts ] ++ gccDefs opts ["CPP"]
-                                    ++ [ "-traditional-cpp", {- "-std=gnu99", -} "-fno-show-column", "-P" ]
+              (do { let preCPP  = mkShellCmd' [Cmd_CPP,Cmd_CPP_Preprocessing] Cfg.shellCmdCpp
+                                    (  Cfg.cppOpts ++ gccDefs opts ["CPP"]
+                                    ++ map cppOptF [ {- "traditional-cpp", -} {- "std=gnu99", -} "fno-show-column", "P" ]
 %%[[(99 codegen)
-                                    ++ [ "-I" ++ d | d <- gccInclDirs opts pkgKeyDirL ]
+                                    ++ [ cppOptI d | d <- gccInclDirs opts pkgKeyDirL ]
 %%]]
-                                    ++ [ fpathToStr fp, fpathToStr fpCPP ]
+                                    ++ ehcOptCmdLineOpts opts
+                                    ++ map (cppArg . fpathToStr) [ fp, fpCPP ]
                                     )
                   ; when (ehcOptVerbosity opts >= VerboseALot)
                          (do { cpMsg modNm VerboseALot "CPP"
-                             ; lift $ putStrLn ("pkg db: " ++ show (ehcOptPkgDb opts))
-                             ; lift $ putStrLn ("pkg srch filter: " ++ (show $ ehcOptPackageSearchFilter opts))
-                             ; lift $ putStrLn ("exposed pkgs: " ++ show (pkgExposedPackages $ ehcOptPkgDb opts))
-                             ; lift $ putStrLn ("pkgKeyDirL: " ++ show pkgKeyDirL)
+                             -- ; lift $ putStrLn ("pkg db: " ++ show (ehcOptPkgDb opts))
+                             -- ; lift $ putStrLn ("pkg srch filter: " ++ (show $ ehcOptPackageSearchFilter opts))
+                             -- ; lift $ putStrLn ("exposed pkgs: " ++ show (pkgExposedPackages $ ehcOptPkgDb opts))
+                             -- ; lift $ putStrLn ("pkgKeyDirL: " ++ show pkgKeyDirL)
                              ; lift $ putStrLn preCPP
                              })
                   ; when (crModCanCompile modNm cr)

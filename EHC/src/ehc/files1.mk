@@ -54,20 +54,21 @@ EHC_HS_MAIN_SRC_CHS						:= $(patsubst %,$(SRC_EHC_PREFIX)%.chs,$(EHC_MAIN))
 EHC_HS_MAIN_DRV_HS						:= $(patsubst $(SRC_EHC_PREFIX)%.chs,$(EHC_BLD_VARIANT_ASPECTS_PREFIX)%.hs,$(EHC_HS_MAIN_SRC_CHS))
 
 EHC_HS_UTIL_SRC_CHS						:= $(patsubst %,$(SRC_EHC_PREFIX)%.chs,\
-													Substitutable Opts Gam VarMp VarLookup Deriving Generics Module Config BuiltinPrims NameAspect DerivationTree CHR Pred HI LamInfo AbstractCore \
+													FinalEnv Substitutable Opts Gam VarMp VarLookup Deriving Generics Module Config BuiltinPrims NameAspect DerivationTree CHR Pred HI LamInfo AbstractCore \
 													$(addprefix CHR/,Key Constraint Solve) \
 													$(addprefix AbstractCore/,Utils) \
 													$(addprefix AnaDomain/,Utils) \
 													$(addprefix VarMp/,Utils) \
 													$(addprefix Cil/,Common TyTag) \
-													$(addprefix Opts/,Base) \
+													$(addprefix Opts/,Base CommandLine) \
 													$(addprefix Pred/,ToCHR CHR Evidence EvidenceToCore EvidenceToTyCore Heuristics CommonCHR RedGraph) \
-													$(addprefix Base/,AssocL UID Parser Parser2 Pragma Binary Serialize Strictness GenC GenJavaLike Hashable Target BasicAnnot Common Builtin Builtin2 HsName Debug TreeTrie CfgPP LaTeX HtmlCommon Bits FileSearchLocation PackageDatabase ParseUtils Optimize) \
+													$(addprefix Base/,TermLike AssocL UID Parser Parser2 Pragma Binary Serialize Strictness GenC GenJavaLike Target BasicAnnot Common Builtin Builtin2 HsName Debug TreeTrie CfgPP LaTeX HtmlCommon Bits FileSearchLocation PackageDatabase ParseUtils Optimize) \
 													$(addprefix Scanner/,Common Machine Scanner Token TokenParser) \
 													$(addsuffix /Parser,Ty EH HS Foreign Core GrinCode) \
 													$(addprefix Ty/,FIEnv FIEnv2 FitsInCommon FitsInCommon2 FitsIn Utils1 Utils2 AppSpineGam Trf/BetaReduce) \
-													$(addprefix Gam/,Base Utils Instantiate Quantify LevelMapGam ScopeMapGam Full AppSpineGam FixityGam TyGam KiGam DataGam PolGam TyKiGam ValGam ClassDefaultGam) \
+													$(addprefix Gam/,Base Utils Instantiate Quantify ScopeMapGam Full ClGam AppSpineGam FixityGam TyGam KiGam DataGam PolGam TyKiGam ValGam ClassDefaultGam) \
 													$(addprefix Core/,Utils FFI Coercion Trf) \
+													$(addprefix Core/SysF/,AsTy) \
 													$(addprefix TyCore/,Base Utils2 Coercion Full0 Full1 Full2 Subst Trf) \
 													$(addprefix TyCore/Trf/,Common) \
 													$(addprefix GrinCode/,Common SolveEqs) \
@@ -415,13 +416,16 @@ $(EHC_HS_SIG_DRV_HS): $(EHC_ALL_CHUNK_SRC) $(EHC_RULES_ALL_SRC) $(EHC_MKF)
 # installation configuration
 $(EHC_HS_CFGINSTALL_DRV_HS): $(EHC_MKF) $(MK_SHARED_MKF)
 	@(echo "module $(LIB_EHC_QUAL_PREFIX)$(EHC_HS_CFGINSTALL_MAIN) where" ; \
+	  echo "import $(LIB_EHC_QUAL_PREFIX)Opts.CommandLine" ; \
 	  echo "import Data.List" ; \
 	  echo "" ; \
 	  echo "ehcDefaultVariant = \"$(EHC_VARIANT_ASPECTS)\"" ; \
 	  echo "" ; \
-	  echo "gccOpts = \"$(GCC_OPTS_WHEN_EHC)\"" ; \
+	  echo "gccOpts  = fst $$ parseCmdLineOpts Cmd_CPP \"$(GCC_OPTS_WHEN_EHC)\"" ; \
+	  echo "-- gccOpts  = showCmdLineOpts gccOpts'" ; \
 	  echo "" ; \
-	  echo "cppOpts = \"$(CPP_OPTS_WHEN_EHC)\"" ; \
+	  echo "cppOpts  = fst $$ parseCmdLineOpts Cmd_CPP \"$(CPP_OPTS_WHEN_EHC)\"" ; \
+	  echo "-- cppOpts  = showCmdLineOpts cppOpts'" ; \
 	  echo "" ; \
 	  if test x$(GIT_VERSION_EXISTS) = xyes ; \
 	  then \

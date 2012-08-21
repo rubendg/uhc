@@ -1,0 +1,386 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysfTy for Core elaboration: conversion of types to Core representation for use in Core
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: utils
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf) hs
+ty2TySysfWithEnvVarMp :: ToSysfEnv -> VarMp -> Ty -> SysfTy
+ty2TySysfWithEnvVarMp env m t = SysF.ty2TySysfWithEnv env (m `varUpd` t)
+
+sysftyLookup :: VarMp -> ToSysfEnv -> HsName -> ValGam -> SysfTy
+sysftyLookup tyVarMp env nm g = ty2TySysfWithEnvVarMp env tyVarMp $ fst $ valGamLookupTy nm g
+
+sysftyBareFromTy :: ToSysfEnv -> VarMp -> Ty -> SysfTy
+sysftyBareFromTy env m t = SysF.tyToSysfTyBare env (m `varUpd` t)
+%%]
+
+%%[(8 codegen coresysf) hs
+sysftyCloseExists :: SysfTy -> (SysfTy,CExpr -> CExpr)
+sysftyCloseExists t
+  = case SysF.unTySeq t of
+      -- (SysF.Expr_Exists s te) -> (te,SysF.Expr_CloseExists (SysF.sysftyL0BindToL1Bind s) (appDbg "sysftyCloseExists.tyClosed") t)
+      _                       -> (t ,id)
+
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: a dummy def, to be overridden elsewhere using :=, if aspect 'coresysf' defined
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen)
+SEM Expr PatExpr Decl DataFieldExpr
+  | *           loc         .   sysfty          =   (appDbg "{Expr,PatExpr,Decl,DataFieldExpr}.sysfty not implemented" :: SysfTy)
+
+SEM Expr
+  | Lam         
+%%[[12
+    LamImpl
+%%]]
+                loc         .   sysftyLamArg    =   (appDbg "Expr.{Lam LamImpl}.sysftyArg not implemented" :: SysfTy)
+%%]
+
+%%[(9 codegen)
+SEM Expr
+  | AppTop Rec Lam Let
+                loc         .   sysftyKnImplsL  =   map (const (appDbg "Expr.{AppTop Rec Lam Let}.sysftyKnImplsL not implemented" :: SysfTy)) @finKnImplsLExpanded
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | IConst      loc         .   sysfty      :=  SysF.sysftyInt
+  | CConst      loc         .   sysfty      :=  SysF.sysftyChar
+  | Var Con     loc         .   sysfty      :=  ty2TySysfWithEnvVarMp @lhs.sysfEnv @lhs.finTyVarMp @ty_g_
+  | App AppImpred
+%%[[12
+    AppImpl
+%%]]
+                loc         .   sysfty      :=  @sysftyTyAppRes
+  | * - Var Con IConst CConst App AppImpred Parens
+%%[[12
+    AppImpl
+%%]]
+                loc         .   sysfty      :=  @lhs.sysftyTopDown
+
+SEM PatExpr
+  | Var         loc         .   sysfty      :=  @lhs.sysftyTopDown
+  | AppTop      loc         .   sysfty      :=  SysF.mkTyThunk @sysftyPat
+  | * - Var AppTop Parens
+                loc         .   sysfty      :=  (appDbg "PatExpr.sysfty not implemented" :: SysfTy)
+
+SEM PatExpr
+  | AppTop Rec  loc         .   sysftyPat   =   SysF.mkTySeq $ ty2TySysfWithEnvVarMp @lhs.sysfEnv emptyVarMp @finKnPatTy -- @lhs.finTyVarMp @knPatTy
+
+SEM Decl
+  | Val         loc         .   sysfty      :=  ty2TySysfWithEnvVarMp @lhs.sysfEnv emptyVarMp @finalTyExpanded
+                            .   sysftyGam   =   sysftyLookup @lhs.finTyVarMp @lhs.sysfEnv @patExpr.topNm @lhs.finValGam
+                            .   sysftyBind  =   if @lhs.isStrict then @sysfty else SysF.mkTyThunk @sysfty
+  | Data        loc         .   sysfki      =   SysF.tyToSysfTyKi @lhs.sysfEnv $ @lhs.finKiVarMp `varUpd` tkgiKi @dataTkgi -- $ tkgiKi $ fst $ tyKiGamLookupByNameErr @tyNm @lhs.finTyKiGam
+  | FFI         loc         .   sysfty      :=  ty2TySysfWithEnvVarMp @lhs.sysfEnv emptyVarMp @finalTyExpanded
+  | * - Val Data FFI
+                loc         .   sysfty      :=  (appDbg "Decl.sysfty not implemented" :: SysfTy)
+
+SEM DataFieldExpr
+  | *
+                loc         .   sysfty      :=  (appDbg "DataFieldExpr.sysfty not implemented" :: SysfTy)
+%%]
+
+%%[(9 codegen coresysf)
+%%]
+SEM Expr
+  | AppTop Rec Lam Let
+                loc         .   sysftyKnImplsL  =   map (ty2TySysfWithEnvVarMp @lhs.sysfEnv @lhs.finTyVarMp) @finKnImplsLExpanded
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: down passing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf)
+ATTR AllExpr AllPatExpr AllCase [ sysftyTopDown: {SysfTy} | | ]
+ATTR AllCase [ sysftyPatTopDown: {SysfTy} | | ]
+
+SEM Expr
+  | Lam         
+%%[[12
+    LamImpl
+%%]]
+                loc         .   sysftyTopDownArgBase
+                                            =   cSubstApp @sysfcSubstLamSpine @sysftyLamArg
+                            .   sysftyTopDownResBase
+                                            =   cSubstApp @sysfcSubstLamSpine @sysftyLamRes
+  | App AppImpred
+%%[[12
+    AppImpl
+%%]]
+                loc         .   sysftyTopDownArgBase
+                                            =   cSubstApp @func.sysfcSubstAppSpine $ SysF.tyUnThunkTySeq $ SysF.unTySeq @sysftyAppArg
+%%]
+
+%%[(8 codegen coresysf)
+SEM AGItf
+  | AGItf       expr        .   sysftyTopDown   =   (appDbg "AGItf.AGItf.sysftyTopDown" :: SysfTy)
+
+SEM Expr
+  | Lam         
+%%[[12
+    LamImpl
+%%]]
+                arg         .   sysftyTopDown   =   @sysftyTopDownArgBase
+                (body.sysftyTopDown,loc.closeExistsWrap)
+                                                =   sysftyCloseExists @sysftyTopDownResBase
+  | Case        alts        .   sysftyPatTopDown
+                                                =   @expr.sysftyBotUp
+  | App AppImpred
+%%[[12
+    AppImpl
+%%]]
+                arg         .   sysftyTopDown   =   @sysftyTopDownArgBase
+
+SEM Decl
+  | Val         loc         .   sysftyTopDown   =   SysF.tyUnThunkTySeq @sysftyBind
+
+SEM PatExpr
+  | App         arg         .   sysftyTopDown   =   cSubstApp @lhs.sysfcSubstPatSpine $ SysF.mkTyThunk $ ty2TySysfWithEnvVarMp @lhs.sysfEnv @lhs.finTyVarMp @knArgTy
+
+SEM RecPatExpr
+  | Ext         patExpr     .   sysftyTopDown   =   cSubstApp @lhs.sysfcSubstPatSpine $ SysF.mkTyThunk $ ty2TySysfWithEnvVarMp @lhs.sysfEnv @lhs.finTyVarMp @patTy
+
+SEM CaseAlt
+  | Pat         patExpr     .   sysftyTopDown   =   @lhs.sysftyPatTopDown
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: up passing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf)
+ATTR Expr [ | | sysftyBotUp: {SysfTy} ]
+
+SEM Expr
+  | * - Parens
+                loc         .   sysftyBotUp     =   @sysftyTyAppRes
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: splitting into args/res for App
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Instantiation info [InstTo] drives the splitting up into type and value args.
+For now this is extracted from value bindings only, but must be done for other constructs as well.
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | App AppImpred
+%%[[12
+    AppImpl
+%%]]
+                loc         .   (sysftyTyAppArgL,sysftyAppArg,sysftyTyAppRes)
+                                                =   let (al,_,a,r) = SysF.tyArrowInstQuArgsRes SysF.ArrowDecompose_ArgBefore @finAppInstToLHere 0 @func.sysftyBotUp
+                                                    in  (al,cbindExtractVal a,r)
+  | * - App AppImpred Parens
+%%[[12
+    AppImpl
+%%]]
+                loc         .   (sysftyTyAppArgL,_,_,sysftyTyAppRes)
+                                                =   SysF.tyArrowInstQuArgsRes SysF.ArrowDecompose_InstOnly @finAppInstToLHere 0 @sysfty
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: wrappers for inserting required type level args
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf) hs
+sysftyMkLamWrap :: CSubst -> [CBind] -> CExpr -> CExpr
+sysftyMkLamWrap spineSubst tyArgL e
+  = flip acoreLamBind e $
+    map (cSubstAppExprAndBinds spineSubst . SysF.tyL0BindToL1Bind)
+        tyArgL
+%%]
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | * - Ann Parens
+  				loc         .   sysfcTyArgAppWrap
+                                                =   if ehcOptCoreSysFGen @lhs.opts
+                                                    then \e -> acoreAppBound e $
+                                                               map (cSubstAppBound @sysfcSubstAppSpine . SysF.tyL0BindToL1Val 0)
+                                                                   @sysftyTyAppArgL
+                                                    else id
+                            .   sysfcTyArgLamWrap
+                                                =   if ehcOptCoreSysFGen @lhs.opts
+                                                    then sysftyMkLamWrap @lhs.sysfcSubstLamSpine @sysftyTyLamArgL
+                                                    else id
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: splitting into args/res for Lam
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Instantiation info [InstTo] drives the splitting up into type and value args,
+see remarks for finAppInstToL.
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | Lam         
+%%[[12
+    LamImpl
+%%]]
+                loc         .   (sysftyTyLamArgL,sysftyLamArg,sysftyLamRes)
+                                                :=  let (al,_,a,r) = SysF.tyArrowInstQuArgsRes SysF.ArrowDecompose_ArgAfter @finLamInstToLHere @sysftyNrDropImpl @lhs.sysftyTopDown
+                                                    in  (al,cbindExtractVal a,r)
+  | * - Lam Parens
+%%[[12
+    LamImpl
+%%]]
+                loc         .   (sysftyTyLamArgL,sysftyTyLamRes)
+                                                =   let (al,_,_,r) = SysF.tyArrowInstQuArgsRes SysF.ArrowDecompose_InstOnly @finLamInstToLHere @sysftyNrDropImpl @lhs.sysftyTopDown
+                                                    in  (al,r)
+  | AppTop Rec Let Lam
+%%[[8
+                loc         .   sysftyNrDropImpl=   (0::Int)
+%%][9
+                loc         .   sysftyNrDropImpl=   length @finKnImplsL
+%%]]
+  | * - AppTop Rec Let Lam Parens
+                loc         .   sysftyNrDropImpl=   (0::Int)
+%%]
+                            .   sysftyLamArgHere
+                                                =   @sysfcSubstLamSpine `cSubstApp` SysF.unTySeq @sysftyLamArg
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: matching, in relation to type inference'd types
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf)
+-- the CSubst binding Ty tvars to SysF Ty vars, to propagate the instantiation of a lambda
+ATTR Expr [ | | sysfcSubstAppSpine: {SysF.CSubst} ]
+%%]
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | Var Con     loc         .   sysftyForMatch  =   sysftyBareFromTy @lhs.sysfEnv @lhs.finTyVarMp @ty_g_
+%%]
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | Var Con     loc         .   moutFun         =   SysF.matchBind @sysftyForMatch $ sysftyBareFromTy @lhs.sysfEnv emptyVarMp @finalTyExpanded -- @lhs.finTyVarMp @ty
+                            .   sysfcSubstAppSpine
+                                                =   SysF.moutCSubst @moutFun
+  | App AppImpred
+%%[[12
+    AppImpl
+%%]]
+                loc         .   sysfcSubstAppSpine
+                                                =   @func.sysfcSubstAppSpine
+  | * - Var Con App AppImpred Parens
+%%[[12
+    AppImpl
+%%]]
+                loc         .   sysfcSubstAppSpine
+                                                =   (emptyCSubst :: SysF.CSubst)
+%%]
+
+%%[(8 codegen coresysf)
+-- the CSubst binding Ty tvars to SysF Ty vars, to propagate the abstraction of a lambda
+ATTR Expr [ sysfcSubstLamSpine: {SysF.CSubst} | | ]
+%%]
+
+%%[(8 codegen coresysf)
+SEM Decl
+  | Val         loc         .   sysftyExprKnTy  =   sysftyBareFromTy @lhs.sysfEnv @lhs.finTyVarMp @exprKnTy
+                            .   sysftyExprTy    =   sysftyBareFromTy @lhs.sysfEnv emptyVarMp @finalTyExpanded -- @lhs.finTyVarMp @expr.ty
+                            .   moutExpr        =   SysF.matchBind @sysftyExprKnTy @sysftyExprTy
+                            .   sysfcSubstLamSpine
+                                                =   SysF.moutCSubst @moutExpr
+%%]
+
+%%[(8 codegen coresysf)
+SEM Expr
+  | Lam
+%%[[12
+    LamImpl
+%%]]
+                loc         .   sysfcSubstLamSpine
+                                                =   @lhs.sysfcSubstLamSpine
+  | * - Lam Parens
+%%[[12
+    LamImpl
+%%]]
+                loc         .   sysfcSubstLamSpine
+                                                =   (emptyCSubst :: SysF.CSubst)
+%%]
+
+%%[(8 codegen coresysf)
+-- the CSubst binding Ty tvars to SysF Ty vars, to propagate the @lhs.sysftyTopDown over constituents
+ATTR AllPatExpr [ sysfcSubstPatSpine: {SysF.CSubst} | | ]
+%%]
+
+%%[(8 codegen coresysf)
+SEM CaseAlt
+  | Pat         loc         .   sysfcSubstPatSpine
+                                                =   emptyCSubst
+SEM Decl
+  | Val         loc         .   sysfcSubstPatSpine
+                                                =   emptyCSubst
+SEM Expr
+  | Lam
+%%[[12
+    LamImpl
+%%]]
+                loc         .   sysfcSubstPatSpine
+                                                =   emptyCSubst
+%%]
+
+%%[(8 codegen coresysf)
+SEM PatExpr
+  | AppTop Rec  loc         .   moutPat         =   SysF.matchBind @sysftyPat $ SysF.tyUnThunkTySeq @lhs.sysftyTopDown
+                            .   sysfcSubstPatSpine
+                                                =   SysF.moutCSubst @moutPat
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF's Ty: defaults
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf)
+SEM AGItf
+  | AGItf       expr        .   sysfcSubstLamSpine
+                                                =   emptyCSubst
+
+SEM CaseAlt
+  | Pat         expr        .   sysfcSubstLamSpine
+                                                =   emptyCSubst
+
+SEM DataFieldExpr RecExpr
+  | Expr Upd    expr        .   sysfcSubstLamSpine
+                                                =   emptyCSubst
+
+SEM RecExpr
+  | Ext         expr        .   sysfcSubstLamSpine
+                                                =   emptyCSubst
+
+%%[[9
+SEM Decl
+  | InstanceIntro
+%%[[90
+    FFE
+%%]]
+                expr        .   sysftyTopDown   =   (appDbg "Decl.InstanceIntro.sysftyTopDown" :: SysfTy)
+                            .   sysfcSubstLamSpine
+                                                =   emptyCSubst
+%%]]
+
+%%[[97
+SEM PatExpr
+  | Expr        expr        .   sysftyTopDown   =   (appDbg "PatExpr.Expr.sysftyTopDown" :: SysfTy)
+                            .   sysfcSubstLamSpine
+                                                =   emptyCSubst
+%%]]
+%%]
+

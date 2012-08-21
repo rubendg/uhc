@@ -46,6 +46,9 @@ HsNameUniqifier to guarantee such an invariant.
 %%[50 import(Control.Monad, {%{EH}Base.Binary}, {%{EH}Base.Serialize})
 %%]
 
+%%[99 import(Data.Hashable)
+%%]
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Haskell names, uniqification info
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -53,69 +56,69 @@ HsNameUniqifier to guarantee such an invariant.
 %%[7 export(HsNameUniqifier(..))
 -- | A HsNameUniqifier represents the 'type' of unification
 data HsNameUniqifier
-  = HsNameUniqifier_Blank				-- just a new identifier, with an empty show
-  | HsNameUniqifier_New					-- just a new identifier
-  | HsNameUniqifier_GloballyUnique		-- globally unique
-  | HsNameUniqifier_Evaluated			-- evaluated
-  | HsNameUniqifier_Field				-- extracted field
-  | HsNameUniqifier_Class				-- class
-  | HsNameUniqifier_ClassDict			-- dictionary
-  | HsNameUniqifier_SelfDict			-- dictionary under construction itself, passed as arg in tying the knot recursion
-  | HsNameUniqifier_ResultDict			-- dictionary under construction result
-  | HsNameUniqifier_SuperClass			-- super class field
-  | HsNameUniqifier_DictField			-- dictionary field
-  | HsNameUniqifier_Inline				-- new identifier because of inlining
-  | HsNameUniqifier_GloballyUniqueDict	-- globally unique dictionary
-  | HsNameUniqifier_FieldOffset			-- offset for a field
-  | HsNameUniqifier_CaseContinuation	-- continuation of a case expression
-  | HsNameUniqifier_GrinUpdated			-- Grin: updated value
-  | HsNameUniqifier_FFIArg				-- arg evaluated for FFI
-  | HsNameUniqifier_LacksLabel			-- label used in lacking predicates
-  | HsNameUniqifier_BindAspect			-- binding aspect
-  | HsNameUniqifier_Strict				-- strict variant of binding
+  = HsNameUniqifier_Blank               -- just a new identifier, with an empty show
+  | HsNameUniqifier_New                 -- just a new identifier
+  | HsNameUniqifier_GloballyUnique      -- globally unique
+  | HsNameUniqifier_Evaluated           -- evaluated
+  | HsNameUniqifier_Field               -- extracted field
+  | HsNameUniqifier_Class               -- class
+  | HsNameUniqifier_ClassDict           -- dictionary
+  | HsNameUniqifier_SelfDict            -- dictionary under construction itself, passed as arg in tying the knot recursion
+  | HsNameUniqifier_ResultDict          -- dictionary under construction result
+  | HsNameUniqifier_SuperClass          -- super class field
+  | HsNameUniqifier_DictField           -- dictionary field
+  | HsNameUniqifier_Inline              -- new identifier because of inlining
+  | HsNameUniqifier_GloballyUniqueDict  -- globally unique dictionary
+  | HsNameUniqifier_FieldOffset         -- offset for a field
+  | HsNameUniqifier_CaseContinuation    -- continuation of a case expression
+  | HsNameUniqifier_GrinUpdated         -- Grin: updated value
+  | HsNameUniqifier_FFIArg              -- arg evaluated for FFI
+  | HsNameUniqifier_LacksLabel          -- label used in lacking predicates
+  | HsNameUniqifier_BindAspect          -- binding aspect
+  | HsNameUniqifier_Strict              -- strict variant of binding
 %%[[92
-  | HsNameUniqifier_GenericClass		-- a name introduced by generics
+  | HsNameUniqifier_GenericClass        -- a name introduced by generics
 %%]]
 %%[[(8 javascript)
-  | HsNameUniqifier_JSSwitchResult		-- var for result of switch
+  | HsNameUniqifier_JSSwitchResult      -- var for result of switch
 %%]]
 %%[[(90 codegen)
-  | HsNameUniqifier_FFE					-- name of value to be ff exported
-  | HsNameUniqifier_FFECoerced			-- name of possibly coerced value to be ff exported
+  | HsNameUniqifier_FFE                 -- name of value to be ff exported
+  | HsNameUniqifier_FFECoerced          -- name of possibly coerced value to be ff exported
 %%]]
   deriving (Eq,Ord,Enum)
 
 -- | The show of a HsNameUniqifier is found back in the pretty printed code, current convention is 3 uppercase letters, as a balance between size and clarity of meaning
 instance Show HsNameUniqifier where
-  show HsNameUniqifier_Blank			 	= ""
-  show HsNameUniqifier_New			 		= "NEW"
-  show HsNameUniqifier_GloballyUnique 		= "UNQ"
-  show HsNameUniqifier_Evaluated 			= "EVL"
-  show HsNameUniqifier_Field	 			= "FLD"
-  show HsNameUniqifier_Class	 			= "CLS"
-  show HsNameUniqifier_ClassDict	 		= "DCT"
-  show HsNameUniqifier_SelfDict	 			= "SDC"
-  show HsNameUniqifier_ResultDict	 		= "RDC"
-  show HsNameUniqifier_SuperClass	 		= "SUP"
-  show HsNameUniqifier_DictField	 		= "DFL"
-  show HsNameUniqifier_Inline		 		= "INL"
-  show HsNameUniqifier_GloballyUniqueDict	= "UND"
-  show HsNameUniqifier_FieldOffset			= "OFF"
-  show HsNameUniqifier_CaseContinuation		= "CCN"
-  show HsNameUniqifier_GrinUpdated			= "UPD"
-  show HsNameUniqifier_FFIArg				= "FFI"
-  show HsNameUniqifier_LacksLabel			= "LBL"
-  show HsNameUniqifier_BindAspect			= "ASP"
-  show HsNameUniqifier_Strict			    = "STR"
+  show HsNameUniqifier_Blank                = ""
+  show HsNameUniqifier_New                  = "NEW"
+  show HsNameUniqifier_GloballyUnique       = "UNQ"
+  show HsNameUniqifier_Evaluated            = "EVL"
+  show HsNameUniqifier_Field                = "FLD"
+  show HsNameUniqifier_Class                = "CLS"
+  show HsNameUniqifier_ClassDict            = "DCT"
+  show HsNameUniqifier_SelfDict             = "SDC"
+  show HsNameUniqifier_ResultDict           = "RDC"
+  show HsNameUniqifier_SuperClass           = "SUP"
+  show HsNameUniqifier_DictField            = "DFL"
+  show HsNameUniqifier_Inline               = "INL"
+  show HsNameUniqifier_GloballyUniqueDict   = "UND"
+  show HsNameUniqifier_FieldOffset          = "OFF"
+  show HsNameUniqifier_CaseContinuation     = "CCN"
+  show HsNameUniqifier_GrinUpdated          = "UPD"
+  show HsNameUniqifier_FFIArg               = "FFI"
+  show HsNameUniqifier_LacksLabel           = "LBL"
+  show HsNameUniqifier_BindAspect           = "ASP"
+  show HsNameUniqifier_Strict               = "STR"
 %%[[91
-  show HsNameUniqifier_GenericClass			= "GEN"
+  show HsNameUniqifier_GenericClass         = "GEN"
 %%]]
 %%[[(8 javascript)
-  show HsNameUniqifier_JSSwitchResult		= "JSW"
+  show HsNameUniqifier_JSSwitchResult       = "JSW"
 %%]]
 %%[[(90 codegen)
-  show HsNameUniqifier_FFE					= "FFE"
-  show HsNameUniqifier_FFECoerced			= "FFC"
+  show HsNameUniqifier_FFE                  = "FFE"
+  show HsNameUniqifier_FFECoerced           = "FFC"
 %%]]
 %%]
 
@@ -178,8 +181,8 @@ uniqifierMpAdd ufier u m = Map.unionWith (++) (Map.singleton ufier [u]) m
 hsnUniqify' :: HsNameUniqifier -> HsNameUnique -> HsName -> HsName
 hsnUniqify' ufier u
   = mk
-  where mk n@(HsName_Modf {hsnUniqifiers=us}) = n {hsnUniqifiers = uniqifierMpAdd ufier u us}
-        mk n                                 = mk (HsName_Modf [] n Map.empty)
+  where mk n@(HsName_Modf {hsnUniqifiers=us}) = hsnFixateHash (n {hsnUniqifiers = uniqifierMpAdd ufier u us})
+        mk n                                  = mk (hsnMkModf [] n Map.empty)
 
 -- | Uniqify with just a name suffix
 hsnUniqify :: HsNameUniqifier -> HsName -> HsName
@@ -203,25 +206,79 @@ hsnUniqifyEval = hsnUniqify HsNameUniqifier_Evaluated
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Haskell names: hashing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[99
+hsnHashWithSalt :: Int -> HsName -> Int
+hsnHashWithSalt salt (HsName_Base s      ) = hashWithSalt salt s
+hsnHashWithSalt salt (HsName_Pos  p      ) = hashWithSalt salt p
+hsnHashWithSalt salt (HsName_Modf _ q b u) = hashWithSalt salt q `combine` hashWithSalt salt b `combine` hashWithSalt salt (Map.toList u)
+hsnHashWithSalt salt (HNmNr i n          ) = i `combine` hashWithSalt salt n
+
+instance Hashable HsName where
+  hashWithSalt salt n@(HsName_Modf h _ _ _) | h /= 0 = h
+  hashWithSalt salt n                                = hsnHashWithSalt salt n
+
+instance Hashable OrigName where
+  hashWithSalt salt (OrigNone    ) = salt
+  hashWithSalt salt (OrigLocal  n) = 23 `combine` hashWithSalt salt n
+  hashWithSalt salt (OrigGlobal n) = 19 `combine` hashWithSalt salt n
+  hashWithSalt salt (OrigFunc   n) = 17 `combine` hashWithSalt salt n
+
+instance Hashable HsNameUnique where
+  hashWithSalt salt (HsNameUnique_None    ) = salt
+  hashWithSalt salt (HsNameUnique_String s) = hashWithSalt salt s
+  hashWithSalt salt (HsNameUnique_Int    i) = hashWithSalt salt i
+  hashWithSalt salt (HsNameUnique_UID    u) = hashWithSalt salt u
+
+instance Hashable HsNameUniqifier where
+  hashWithSalt salt u = hashWithSalt salt (fromEnum u)
+%%]
+
+%%[1
+-- | Fixate hash
+hsnFixateHash :: HsName -> HsName
+%%[[99
+hsnFixateHash n@(HsName_Modf _ _ _ _) = n {hsnHash = hsnHashWithSalt 17 n}
+%%]]
+hsnFixateHash n                       = n
+{-# INLINE hsnFixateHash #-}
+%%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Haskell names, datatype
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%[1.HsName.type export(HsName(..))
+%%[1.HsName.type export(HsName(HsName_Base,HsName_Pos,HNmNr))
 data HsName
   =   HsName_Base                   !String
 %%[[7
   |   HsName_Modf
-        { hsnQualifiers         ::  ![String]
+        { 
+          -- a secret hash, prefixing other fields as to enforce comparison on the hash first; only used at variant 99 and onwards to avoid clutter
+          hsnHash               ::  !Int
+        , hsnQualifiers         ::  ![String]
         , hsnBase               ::  !HsName
         , hsnUniqifiers         ::  !HsNameUniqifierMp
         }
   |   HsName_Pos                    !Int
-  -- |   HNmQ                          ![HsName]
 %%]]
 %%[[8
   |   HNmNr                         !Int !OrigName
 %%]]
   deriving (Eq,Ord)
+%%]
+
+%%[1
+-- | Smart constructor for HsName_Modf
+hsnMkModf :: [String] -> HsName -> HsNameUniqifierMp -> HsName
+%%[[1
+hsnMkModf = HsName_Modf 0
+%%][99
+hsnMkModf q b u = hsnFixateHash $ HsName_Modf 0 q b u
+%%]]
+{-# INLINE hsnMkModf #-}
 %%]
 
 instance Eq HsName where
@@ -238,7 +295,7 @@ mkHNmBase :: String -> HsName
 %%[[1
 mkHNmBase = HsName_Base
 %%][7
-mkHNmBase s = HsName_Modf [] (HsName_Base s) Map.empty
+mkHNmBase s = hsnMkModf [] (HsName_Base s) Map.empty
 %%]]
 %%]
 
@@ -247,16 +304,16 @@ mkHNmBase s = HsName_Modf [] (HsName_Base s) Map.empty
 hsnBaseUnpack' :: HsName -> Maybe ([String],String,[String] -> String -> HsName)
 hsnBaseUnpack' (HsName_Base s    ) = Just ([],s,\_ s -> HsName_Base s)
 %%[[7
-hsnBaseUnpack' (HsName_Modf q b u) = fmap (\(bs,mk) -> (q, bs, \q s -> HsName_Modf q (mk s) u)) (hsnBaseUnpack b)
-hsnBaseUnpack' _                   = Nothing
+hsnBaseUnpack' (HsName_Modf _ q b u) = fmap (\(bs,mk) -> (q, bs, \q s -> hsnMkModf q (mk s) u)) (hsnBaseUnpack b)
+hsnBaseUnpack' _                     = Nothing
 %%]]
 
 -- | unpack a HsName into base string + repack function
 hsnBaseUnpack :: HsName -> Maybe (String,String -> HsName)
 hsnBaseUnpack (HsName_Base s    ) = Just (s,HsName_Base)
 %%[[7
-hsnBaseUnpack (HsName_Modf q b u) = fmap (\(bs,mk) -> (bs, \s -> HsName_Modf q (mk s) u)) (hsnBaseUnpack b)
-hsnBaseUnpack _                   = Nothing
+hsnBaseUnpack (HsName_Modf _ q b u) = fmap (\(bs,mk) -> (bs, \s -> hsnMkModf q (mk s) u)) (hsnBaseUnpack b)
+hsnBaseUnpack _                     = Nothing
 %%]]
 %%]
 
@@ -276,12 +333,17 @@ mkHNmPos :: Int -> HsName
 %%[[1
 mkHNmPos = HsName_Pos
 %%][7
-mkHNmPos s = HsName_Modf [] (HsName_Pos s) Map.empty
+mkHNmPos s = hsnMkModf [] (HsName_Pos s) Map.empty
 %%]]
 %%]
 
 %%[7 export(cmpHsNameOnNm)
-cmpHsNameOnNm n1           n2           = compare n1 n2
+-- | Compare, ignoring hash
+cmpHsNameOnNm :: HsName -> HsName -> Ordering
+%%[[99
+cmpHsNameOnNm (HsName_Modf _ q1 b1 u1) (HsName_Modf _ q2 b2 u2) = compare (HsName_Modf 0 q1 b1 u1)  (HsName_Modf 0 q2 b2 u2)
+%%]]
+cmpHsNameOnNm n1                       n2                       = compare n1                        n2
 %%]
 
 %%[1 export(mbHNm)
@@ -316,9 +378,9 @@ instance PP HsName where
 
 %%[7 export(hsnShow)
 hsnShow :: Bool -> String -> String -> HsName -> String
-hsnShow _ _    _    (HsName_Base   s         )  = {- hsnHNmFldToString -} s
-hsnShow l qsep usep (HsName_Modf qs b us     )  = concat $ (intersperse qsep $ qs ++ [hsnShow l qsep usep b]) ++ showHsNameUniqifierMp' l usep us
-hsnShow _ _    _    (HsName_Pos  p           )  = show p
+hsnShow _ _    _    (HsName_Base   s           )  = {- hsnHNmFldToString -} s
+hsnShow l qsep usep (HsName_Modf _ qs b us     )  = concat $ (intersperse qsep $ qs ++ [hsnShow l qsep usep b]) ++ showHsNameUniqifierMp' l usep us
+hsnShow _ _    _    (HsName_Pos    p           )  = show p
 %%[[8
 hsnShow _ _    _    (HNmNr n OrigNone        )  = "x_"        ++ show n
 hsnShow l _    usep (HNmNr n (OrigLocal  hsn))  = "x_"        ++ show n ++ "_" ++ hsnShow l "." usep hsn
@@ -341,9 +403,9 @@ instance Show HsName where
 hsnCanonicSplit :: HsName -> Either ([String],HsName) HsName
 %%[[7
 -- hsnCanonicSplit   (HNmQ        ns    ) = Left $ maybe ([],mkHNmBase "??") (\(i,l) -> (catMaybes $ map hsnMbBaseString i,l) ) (initlast ns)
-hsnCanonicSplit n@(HsName_Modf qs _ _) = Left $ (qs, n {hsnQualifiers = []})
+hsnCanonicSplit n@(HsName_Modf _ qs _ _) = Left $ (qs, hsnFixateHash (n {hsnQualifiers = []}))
 %%]]
-hsnCanonicSplit n                      = Right n
+hsnCanonicSplit n                        = Right n
 %%]
 
 %%[1
@@ -439,7 +501,7 @@ hsnShowAlphanumeric (HNmNr n OrigNone)          = "x" ++ show n
 hsnShowAlphanumeric (HNmNr n (OrigLocal orig))  = "x" ++ show n   -- hsnShowAlphanumeric orig
 hsnShowAlphanumeric (HNmNr n (OrigGlobal orig)) = "global_" ++ hsnShowAlphanumeric orig
 hsnShowAlphanumeric (HNmNr n (OrigFunc   orig)) = "fun_"    ++ hsnShowAlphanumeric orig
-hsnShowAlphanumeric (HsName_Modf q b u)         = concat $ intersperse "_" $ q ++ [hsnShowAlphanumeric b] ++ map stringAlphanumeric (showHsNameUniqifierMp "_" u)
+hsnShowAlphanumeric (HsName_Modf _ q b u)         = concat $ intersperse "_" $ q ++ [hsnShowAlphanumeric b] ++ map stringAlphanumeric (showHsNameUniqifierMp "_" u)
 -- hsnShowAlphanumeric n                           = concat $ intersperse "_" $ map hsnShowAlphanumeric $ hsnToList n
 %%]
 
@@ -533,8 +595,8 @@ hsnSetLevQual _ _ n = n
 
 %%[8 export(hsnFixUniqifiers)
 hsnFixUniqifiers' :: Bool -> String -> HsName -> HsName
-hsnFixUniqifiers' showlen sep (HsName_Modf qs n us) = HsName_Modf qs (hsnSuffix n (concat $ showHsNameUniqifierMp' showlen sep us)) Map.empty
-hsnFixUniqifiers' _       _   n                     = n
+hsnFixUniqifiers' showlen sep (HsName_Modf _ qs n us) = hsnMkModf qs (hsnSuffix n (concat $ showHsNameUniqifierMp' showlen sep us)) Map.empty
+hsnFixUniqifiers' _       _   n                       = n
 
 hsnFixUniqifiers :: HsName -> HsName
 hsnFixUniqifiers = hsnFixUniqifiers' True "_@"
@@ -549,8 +611,8 @@ hsnJavalikeFixUniqifiers = hsnFixUniqifiers' False ""
 
 %%[8 export(hsnStripUniqifiers)
 hsnStripUniqifiers :: HsName -> HsName
-hsnStripUniqifiers (HsName_Modf qs n us) = HsName_Modf qs n emptyHsNameUniqifierMp
-hsnStripUniqifiers n                     = n
+hsnStripUniqifiers (HsName_Modf _ qs n us) = hsnMkModf qs n emptyHsNameUniqifierMp
+hsnStripUniqifiers n                       = n
 %%]
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -605,8 +667,8 @@ instance HSNM [HsName] where
 %%[[7
   mkHNm ns  = case initlast ns of
                 Just (i,l) -> case l of
-                                n@(HsName_Modf _ _ _) -> n {hsnQualifiers = qs}
-                                n                     -> HsName_Modf qs n Map.empty
+                                n@(HsName_Modf _ _ _ _) -> hsnFixateHash (n {hsnQualifiers = qs})
+                                n                       -> hsnMkModf qs n Map.empty
                            where qs = catMaybes $ map hsnMbBaseString i
 %%]]
 %%]
@@ -672,14 +734,14 @@ instance Binary HsName where
 --  put (HNmQ         a    ) = putWord8 1 >> put a
   put (HsName_Pos   a    ) = putWord8 2 >> put a
   put (HNmNr        a b  ) = putWord8 3 >> put a >> put b
-  put (HsName_Modf  a b c) = putWord8 4 >> put a >> put b >> put c
+  put (HsName_Modf  a b c d) = putWord8 4 >> put a >> put b >> put c >> put d
   get = do t <- getWord8
            case t of
              0 -> liftM  HsName_Base    get
              -- 1 -> liftM  HNmQ           get
              2 -> liftM  HsName_Pos     get
              3 -> liftM2 HNmNr          get get
-             4 -> liftM3 HsName_Modf    get get get
+             4 -> liftM4 HsName_Modf    get get get get
 
 instance Serialize HsName where
   sput = sputShared
@@ -822,9 +884,9 @@ hsnSafeJavaLike
 %%[(8 jazy || javascript) hs export(hsnJavaLikeVar)
 -- safe name of a variable
 hsnJavaLikeVar
-  :: ( HsName -> HsName				-- adapt for particular platform, before mangling here
-     , HsName -> HsName				-- post prefix
-     , String -> String				-- adapt module qualifiers
+  :: ( HsName -> HsName             -- adapt for particular platform, before mangling here
+     , HsName -> HsName             -- post prefix
+     , String -> String             -- adapt module qualifiers
      )
      -> HsName -> HsName -> HsName -> HsName
 hsnJavaLikeVar (preadapt, postprefix, updqual) pkg mod v

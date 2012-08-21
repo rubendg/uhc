@@ -558,13 +558,14 @@ envFromGam {- tkg -} getTy ml g
 %%[(8 codegen tycore)
 instance AbstractCore Expr MetaVal ValBind ValBind ValBindCateg MetaBind Ty Pat PatRest FldBind Alt where
   -- expr
-  acoreApp1           			    	= mkExprApp1
+  acore1App           			    	= mkExprApp1
   acoreLam1Ty         				    = mkExprLam1
   acoreTagTupTy   tg t es 				= mkExprTuple' tg t es
   acoreBoundVal1CatLevMetasTy cat n l m t e
   										= mkValBind1LevMetas doMkSeq n l m t e
                                         where doMkSeq = cat /= ValBindCateg_Strict
-  acoreBound1AspkeyVal		  			= panic "TyCore.Base.acoreBound1AspkeyVal"
+  acoreBoundmeta 		  				= panic "TyCore.Base.acoreBoundmeta"
+  acoreBound1MetaVal		  			= panic "TyCore.Base.acoreBound1MetaVal"
   acoreBoundValTy1CatLev _ _ _ t		= panic "TyCore.Base.acoreBoundValTy1CatLev"
   acoreBind1Asp n [a]					= a
   acoreBind1CatLevMetasTy bcat n mlev mb t e
@@ -625,6 +626,7 @@ instance AbstractCore Expr MetaVal ValBind ValBind ValBindCateg MetaBind Ty Pat 
   acoreBindcategPlain					= ValBindCateg_Plain
 
   -- inspecting
+  acoreExprMbApp		  				= panic "TyCore.Base.acoreExprMbApp"
   acoreExprMbLam		  				= panic "TyCore.Base.acoreExprMbLam"
 
   acoreExprMbLet (Expr_Let c b e)       = Just (c,b,e)

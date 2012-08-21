@@ -132,7 +132,7 @@ projBuiltinNm opts proj
   where v  f   = ehcOptBuiltin  opts f
 
 -- | builtin var of constructor
-projBuiltinVar :: (AbstractCore e m b basp bcat mbind t p pr pf a) => EHCOpts -> Proj -> e
+projBuiltinVar :: (AbstractCore e m b bound boundmeta bcat mbind t p pr pf a) => EHCOpts -> Proj -> e
 projBuiltinVar opts proj
   = acoreVar $ projBuiltinNm opts proj
 %%]
@@ -143,13 +143,13 @@ projBuiltinVar opts proj
 
 %%[(92 hmtyinfer)
 -- | pattern names arg to acoreSatSelsCases
-nmLForCase nL = zipWith (\n o -> (n,{-n,-}o)) nL [(0::Int) ..]
+nmLForCase nL = zipWith (\n o -> (n,acoreTyErr $ "nmLForCase: " ++ show n,{-n,-}o)) nL [(0::Int) ..]
 %%]
 
 %%[(92 hmtyinfer) export(projFrom)
 -- | from function, starting with a top level proj
 projFrom
-  :: (AbstractCore e m b basp bcat mbind t p pr pf a, Eq bcat)
+  :: (AbstractCore e m b bound boundmeta bcat mbind t p pr pf a, Eq bcat)
      => EHCOpts
      -> RCEEnv' e m b ba t
      -> Proj        	-- projection descriptor
@@ -157,9 +157,9 @@ projFrom
 projFrom
      opts rceEnv
      (Proj sum)
-  = acoreLam [argNm]
+  = acoreLamTy (acoreTyErrLift "Generics.projFrom.argNm" [argNm])
     $ acoreSatSelsCasesTy
-        rceEnv (Just (hsnUniqifyEval argNm,acoreTyErr "Generics.projFrom.argNm")) (acoreVar argNm)
+        rceEnv (Just (hsnUniqifyEval argNm,acoreTyErr "Generics.projFrom.sel")) (acoreVar argNm)
         [ (tg, nmLForCase nL, Nothing, fst $ mkExp proj nL)
         | proj <- projSumAlts sum
         , let con = projCon proj
@@ -190,11 +190,11 @@ projFrom
               Proj_Comp1 _ _ _  -> var
               Proj_Con   _ _    -> skip
               _                 -> panic ("projFrom.mkExp: " ++ show proj)
-          where wrap = (acoreApp1 (projBuiltinVar opts proj) x, nL')
+          where wrap = (acore1App (projBuiltinVar opts proj) x, nL')
                      where (x,nL') = mkExp (projProj proj) nL
                 unit = (projBuiltinVar opts proj, nL)
                 skip = mkExp (projProj proj) nL
-                var  = (acoreApp1 (projBuiltinVar opts proj) (acoreVar n), nL')
+                var  = (acore1App (projBuiltinVar opts proj) (acoreVar n), nL')
                        
         
 %%]
@@ -202,7 +202,7 @@ projFrom
 %%[(92 hmtyinfer) export(projTo)
 -- | from function, starting with a top level proj
 projTo
-  :: (AbstractCore e m b basp bcat mbind t p pr pf a, Eq bcat)
+  :: (AbstractCore e m b bound boundmeta bcat mbind t p pr pf a, Eq bcat)
      => EHCOpts
      -> RCEEnv' e m b ba t
      -> Proj        	-- projection descriptor
@@ -210,7 +210,7 @@ projTo
 projTo
      opts rceEnv
      (Proj sum)
-  = acoreLam [scrut]
+  = acoreLamTy (acoreTyErrLift "Generics.projTo.scrut" [scrut])
     $ mke (acoreVar scrut)	-- ref to scrut is just dummy
   where (mke,(scrut,_,_)) = mkExp sum [] (hsnLclSupplyWith $ mkHNm "proj")
 

@@ -13,6 +13,7 @@ Ty/ToTyCore.cag
 Ty/TreeTrieKey.cag
 Ty/Pretty.cag
 Ty/PrettyHTML.cag
+Ty/ToSysfTy.cag
 Ty/Trf/Canonic.cag
 Ty/Trf/Instantiate.cag
 Ty/Trf/Quantify.cag
@@ -22,7 +23,6 @@ Ty/Trf/ElimBoth.cag
 Ty/Trf/FreshVar.cag
 Ty/Trf/ElimAlts.cag
 Ty/Trf/ElimEqual.cag
-Ty/Trf/ToSysfTy.cag
 TyCore/Pretty.cag
 TyCore/PrettyAST.cag
 TyCore/ToCore.cag
@@ -31,6 +31,7 @@ TyCore/Check.cag
 JVMClass/ToBinary.cag
 JavaScript/Pretty.cag
 Error/Pretty.cag
+Core/BindExtract.cag
 Core/ToGrin.cag
 Core/ToJazy.cag
 Core/ToJavaScript.cag
@@ -58,6 +59,7 @@ Core/Trf/AnaRelevance.cag
 Core/Trf/ExplicitStackTrace.cag
 Core/Trf/OptimizeStrictness.cag
 Core/Trf/EraseExtractTysigCore.cag
+Core/SysF/Check.cag
 GrinCode/Pretty.cag
 GrinCode/FreeVars.cag
 GrinCode/PointsToAnalysis.cag

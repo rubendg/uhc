@@ -72,7 +72,6 @@ DATA CExpr
 
   -- application, abstraction
   | App         func            : CExpr
-                -- arg             : CExpr
                 arg             : CBound
   | Lam         bind            : CBind
                 body            : CExpr
@@ -119,6 +118,12 @@ DATA CExpr
 %%]]
 %%]
 
+%%[(8 codegen)
+-- for debugging
+DATA CExpr
+  | Dbg			info			: {String}
+%%]
+
 %%[(9 codegen)
 DATA CExpr
   -- coercion related
@@ -135,6 +140,29 @@ DATA CExpr
 %%[(8 codegen)
 TYPE MbCExpr	= MAYBE CExpr
 %%]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% SysF specific
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%[(8 codegen coresysf)
+-- meta (type, kind, ...) level only
+DATA CExpr
+  -- arrow type, i.e. the meta info of a Lam
+  | Arr         bind            : CBind
+                body            : CExpr
+%%]
+
+%%[(8 codegen coresysf)
+-- Coercion related
+DATA CExpr
+  | Cast        expr            : CExpr
+                ty              : CExpr
+%%]
+  | Inject      expr            : Expr		-- l0 only: special case of cast/coerce which injects a tuple into a datatype for a specific tag, expr must be of a node (of prod type)
+                tag             : CTag
+                ty              : Expr
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Meta information
@@ -221,6 +249,8 @@ DATA CBound
   
   -- a (keyed) CExpr
   | Val		    aspectKeyS		: {ACoreBindAspectKeyS}
+  				mlev			: {MetaLev}
+  				lbl				: {CLbl}
   				expr 			: CExpr
   
   -- a (keyed) Ty, of the binding, (1) either the default for Bind, or (2, not yet used) for a Val with the same aspectKeyS

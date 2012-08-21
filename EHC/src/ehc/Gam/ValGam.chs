@@ -8,7 +8,7 @@
 %%[1 import(EH.Util.Pretty,EH.Util.Utils)
 %%]
 
-%%[1 hs import ({%{EH}Base.Common},{%{EH}Base.Builtin})
+%%[1 hs import ({%{EH}Base.Common},{%{EH}Base.TermLike},{%{EH}Base.Builtin})
 %%]
 %%[1 hs import ({%{EH}Ty},{%{EH}Ty.Pretty})
 %%]
@@ -82,9 +82,9 @@ valGamLookup nm g
        Nothing
 %%[[(4 hmtyinfer || hmtyast)
          |  hsnIsProd nm
-                 -> let pr = mkPr nm in mkRes (tyProdArgs pr `mkArrow` pr)
+                 -> let pr = mkPr nm in mkRes (tyProdArgs pr `appArr` pr)
          |  hsnIsUn nm && hsnIsProd (hsnUnUn nm)
-                 -> let pr = mkPr (hsnUnUn nm) in mkRes ([pr] `mkArrow` pr)
+                 -> let pr = mkPr (hsnUnUn nm) in mkRes ([pr] `appArr` pr)
          where  mkPr nm  = mkTyFreshProd (hsnProdArity nm)
                 mkRes t  = Just (ValGamInfo (tyQuantifyClosed t))
 %%][4
@@ -118,7 +118,7 @@ valGamTyOfDataCon :: HsName -> ValGam -> (Ty,Ty,ErrL)
 valGamTyOfDataCon conNm g
   = (t,rt,e)
   where (t,e) = valGamLookupTy conNm g
-        (_,rt) = tyArrowArgsRes t
+        (_,rt) = appUnArr t
 %%]
 
 %%[(7 hmtyinfer || hmtyast) export(valGamTyOfDataFld)
@@ -127,7 +127,7 @@ valGamTyOfDataFld fldNm g
   | null e    = (t,rt,e)
   | otherwise = (t,Ty_Any,e)
   where (t,e) = valGamLookupTy fldNm g
-        ((rt:_),_) = tyArrowArgsRes t
+        ((rt:_),_) = appUnArr t
 %%]
 
 %%[(6 hmtyinfer || hmtyast)
