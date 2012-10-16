@@ -1,5 +1,9 @@
-{-# LANGUAGE CPP #-}
-{-# OPTIONS_GHC -XNoImplicitPrelude #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE CPP, FlexibleInstances #-}
+#ifdef __GLASGOW_HASKELL__
+{-# LANGUAGE NoImplicitPrelude #-}
+#endif
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.String
@@ -10,23 +14,47 @@
 -- Stability   :  experimental
 -- Portability :  portable
 --
--- Things related to the String type.
+-- The @String@ type and associated operations.
 --
 -----------------------------------------------------------------------------
 
 module Data.String (
-   IsString(..)
+   String
+ , IsString(..)
+
+ -- * Functions on strings
+ , lines
+ , words
+ , unlines
+ , unwords
  ) where
 
 #ifdef __GLASGOW_HASKELL__
 import GHC.Base
 #endif
 
+#ifdef __UHC__
+-- import UHC.Base
+#endif
+
+import Data.List (lines, words, unlines, unwords)
+
 -- | Class for string-like datastructures; used by the overloaded string
 --   extension (-foverloaded-strings in GHC).
 class IsString a where
     fromString :: String -> a
 
-instance IsString [Char] where
-    fromString xs = xs
+instance IsString String where
+    fromString = id
+
+#ifdef __UHC_TARGET_JS__
+foreign import prim "primStringToPackedString" primStringToPackedString :: String -> PackedString
+
+instance IsString PackedString where
+    fromString = primStringToPackedString
+#endif
+
+#ifdef __UHC__
+default IsString [Char]
+#endif
 

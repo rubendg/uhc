@@ -8,7 +8,7 @@ Module analysis
 %%]
 
 -- general imports
-%%[50 import(qualified Data.Map as Map)
+%%[50 import(qualified Data.Map as Map, qualified Data.Set as Set)
 %%]
 %%[50 import(qualified EH.Util.Rel as Rel)
 %%]
@@ -25,24 +25,28 @@ Module analysis
 %%[50 import(qualified {%{EH}HS.ModImpExp} as HSSemMod)
 %%]
 
+%%[50 import({%{EH}Base.Debug})
+%%]
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Module analysis
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%[50 export(cpCheckMods')
-cpCheckMods' :: [Mod] -> EHCompilePhase ()
-cpCheckMods' modL@(Mod {modName = modNm} : _)
+cpCheckMods' :: (HsName -> ModMpInfo) -> [Mod] -> EHCompilePhase ()
+cpCheckMods' dfltMod modL@(Mod {modName = modNm} : _)
   = do { cr <- get
+       -- ; cpMsg modNm VerboseDebug $ "cpCheckMods' modL: " ++ show modL
        ; let crsi   = crStateInfo cr
-             (mm,e) = modMpCombine modL (crsiModMp crsi)
+             (mm,e) = modMpCombine' dfltMod modL (crsiModMp crsi)
+       ; cpUpdSI (\crsi -> crsi {crsiModMp = mm})
 %%[[50
        ; when (ehcOptVerbosity (crsiOpts crsi) >= VerboseDebug)
               (do { cpMsg modNm VerboseDebug "cpCheckMods'"
-                  ; lift $ putWidthPPLn 120 (pp (head modL) >-< ppModMp mm) -- debug
+                  ; lift $ putWidthPPLn 120 (pp modNm >-< pp modL >-< ppModMp mm)
                   })
 %%][99
 %%]]
-       ; cpUpdSI (\crsi -> crsi {crsiModMp = mm})
        ; cpSetLimitErrsWhen 5 "Module analysis" e
        }
 %%]
@@ -52,7 +56,7 @@ cpCheckMods :: [HsName] -> EHCompilePhase ()
 cpCheckMods modNmL
   = do { cr <- get
        ; let modL   = [ addBuiltin $ ecuMod $ crCU n cr | n <- modNmL ]
-       ; cpCheckMods' modL
+       ; cpCheckMods' (\n -> panic $ "cpCheckMods: " ++ show n) modL
        }
   where addBuiltin m = m { modImpL = modImpBuiltin : modImpL m }
 %%]
@@ -82,10 +86,11 @@ cpGetHsImports modNm
                  mbHsSemMod = ecuMbHSSemMod ecu
                  hsSemMod   = panicJust "cpGetHsImports" mbHsSemMod
                  modNm'     = HSSemMod.realModuleNm_Syn_AGItf hsSemMod
-                 upd        = ecuStoreHSDeclImpS (HSSemMod.modImpNmS_Syn_AGItf hsSemMod)
+                 upd        = ecuStoreHSDeclImpS ( -- (\v -> tr "XX" (pp $ Set.toList v) v) $ 
+                                                  HSSemMod.modImpNmS_Syn_AGItf hsSemMod)
          ;  case mbHsSemMod of
               Just _ | ecuIsTopMod ecu -> cpUpdCUWithKey modNm (\_ ecu -> (modNm', upd $ cuUpdKey modNm' ecu))
-                     | otherwise       -> do cpUpdCU modNm upd ; return modNm
+                     | otherwise       -> do { cpUpdCU modNm upd ; return modNm }
               _      -> return modNm
          }
 
