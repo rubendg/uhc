@@ -741,5 +741,4 @@ primEq = function(a, b) {
 primCharToUpper = function(c) {
   return String.fromCharCode(c).toUpperCase().charCodeAt(0);
 }
-
 %%]
